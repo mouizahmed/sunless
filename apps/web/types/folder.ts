@@ -1,8 +1,19 @@
+export interface Tag {
+  id: string;
+  name: string;
+  item_id: string;
+  item_type: string;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Folder {
   id: string;
   name: string;
   parent_id: string | null;
   user_id: string;
+  tags?: Tag[];
   created_at: string;
   updated_at: string;
 }
@@ -24,9 +35,9 @@ export interface FileItem {
   type: "video" | "audio" | "folder" | "text" | "file";
   size?: number;
   length?: string;
-  language?: string;
+  language?: string | string[]; // Support single language or multiple languages
   service?: string;
-  tags?: string[];
+  tags?: Tag[];
   created_at: string;
   folder_id?: string;
 }

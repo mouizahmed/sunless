@@ -147,7 +147,7 @@ export function FolderTreeSelector({
             onClick={() => onSelectFolder(null)}
           >
             <Home className="h-4 w-4 text-gray-500" />
-            <span>Dashboard (Root)</span>
+            <span>All Files (Root)</span>
           </div>
           
           {/* Folder tree */}

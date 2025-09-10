@@ -1,6 +1,6 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, Clock, Shield, Search, Users, Zap } from "lucide-react";
+import { MessageSquare, Shield, Search, Users } from "lucide-react";
 
 export default function Features() {
   return (
@@ -13,7 +13,7 @@ export default function Features() {
         </h2>
         <p className="text-center text-gray-600 mb-16 max-w-3xl mx-auto">
           WriteItOut is designed for building accurate transcripts that solve your 
-          team's communication needs while improving productivity and collaboration.
+          team&apos;s communication needs while improving productivity and collaboration.
         </p>
 
         <div className="grid md:grid-cols-3 gap-8">

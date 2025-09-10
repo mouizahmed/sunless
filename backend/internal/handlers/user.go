@@ -1,11 +1,9 @@
 package handlers
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/mouizahmed/justscribe-backend/internal/middleware"
 	"github.com/mouizahmed/justscribe-backend/internal/repository"
 )
 
@@ -21,19 +19,20 @@ func NewUserHandler(userRepo *repository.UserRepository) *UserHandler {
 
 // GetCurrentUser returns the current authenticated user's information
 func (h *UserHandler) GetCurrentUser(c *gin.Context) {
-	// Get user ID from middleware
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+	userID, err := getUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
 	// Fetch user from database
 	user, err := h.userRepo.GetUserByID(userID)
 	if err != nil {
-		fmt.Println("User ID:", userID)
-		fmt.Println("Error fetching user:", err)
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		if err.Error() == "user not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve user information"})
 		return
 	}
 

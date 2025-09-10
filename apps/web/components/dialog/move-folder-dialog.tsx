@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Move, Loader2, AlertTriangle } from "lucide-react";
 import { folderApi } from "@/lib/api";
 import { FolderTreeSelector } from "@/components/ui/folder-tree-selector";
+import { toast } from "sonner";
 import { FileItem, Folder } from "@/types/folder";
 
 interface MoveFolderDialogProps {
@@ -93,7 +94,7 @@ export function MoveFolderDialog({
 
   const getDestinationName = () => {
     if (selectedDestinationId === null) {
-      return "Dashboard (Root)";
+      return "All Files (Root)";
     }
     const folder = allFolders.find(f => f.id === selectedDestinationId);
     return folder ? folder.name : "Unknown";
@@ -130,6 +131,22 @@ export function MoveFolderDialog({
 
       if (movedFolders.length > 0) {
         onFoldersMovedCompleted(movedFolders);
+        const movedCount = movedFolders.length;
+        if (movedCount === 1) {
+          toast.success('1 folder moved successfully');
+        } else {
+          toast.success(`${movedCount} folders moved successfully`);
+        }
+      }
+
+      // Show error toast if there were errors
+      if (errors.length > 0) {
+        const errorCount = errors.length;
+        if (errorCount === 1) {
+          toast.error('1 folder failed to move');
+        } else {
+          toast.error(`${errorCount} folders failed to move`);
+        }
       }
 
       // Close dialog if all folders were moved successfully
@@ -139,6 +156,7 @@ export function MoveFolderDialog({
     } catch (error) {
       console.error('Move operation failed:', error);
       setMoveErrors(['Failed to move folders. Please try again.']);
+      toast.error('Failed to move folders. Please try again.');
     } finally {
       setIsMoving(false);
     }

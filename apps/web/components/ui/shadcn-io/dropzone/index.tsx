@@ -46,7 +46,7 @@ export type DropzoneProps = Omit<DropzoneOptions, 'onDrop'> & {
 
 export const Dropzone = ({
   accept,
-  maxFiles = 1,
+  maxFiles,
   maxSize,
   minSize,
   onDrop,
@@ -192,7 +192,7 @@ export const DropzoneEmptyState = ({
         Upload {maxFiles === 1 ? 'a file' : 'files'}
       </p>
       <p className="w-full truncate text-wrap text-muted-foreground text-xs">
-        Drag and drop or click to upload
+        Drag and drop {maxFiles === 1 ? 'or click to upload' : 'multiple files or click to select'}
       </p>
       {caption && (
         <p className="text-wrap text-muted-foreground text-xs">{caption}.</p>

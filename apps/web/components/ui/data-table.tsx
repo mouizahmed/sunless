@@ -70,7 +70,7 @@ function DataTableComponent<TData, TValue>({
             <tr key={headerGroup.id} className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
               {headerGroup.headers.map((header) => {
                 return (
-                  <th key={header.id} className="h-12 px-4 text-left align-middle font-medium text-muted-foreground whitespace-nowrap [&:has([role=checkbox])]:pr-0">
+                  <th key={header.id} className="h-12 px-4 text-center align-middle font-medium text-muted-foreground whitespace-nowrap [&:has([role=checkbox])]:pr-0">
                     {header.isPlaceholder
                       ? null
                       : flexRender(
@@ -92,7 +92,7 @@ function DataTableComponent<TData, TValue>({
                 data-state={row.getIsSelected() && "selected"}
               >
                 {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="p-4 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0">
+                  <td key={cell.id} className="p-4 text-center align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0">
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}

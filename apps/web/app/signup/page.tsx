@@ -32,14 +32,12 @@ export default function SignUpPage() {
   const { isSignedIn } = useAuth();
   const router = useRouter();
 
-  // Redirect if already logged in
   useEffect(() => {
     if (isLoaded && isSignedIn) {
       router.push('/dashboard');
     }
   }, [isLoaded, isSignedIn, router]);
 
-  // Don't render if already signed in
   if (isLoaded && isSignedIn) {
     return null;
   }

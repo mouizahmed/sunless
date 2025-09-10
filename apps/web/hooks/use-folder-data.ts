@@ -15,7 +15,7 @@ export function useFolderData(folderId: string | null): FolderData {
   
   const [data, setData] = useState<FolderData>({
     folder: null,
-    breadcrumbs: [{ id: null, name: "Dashboard", href: "/dashboard" }],
+    breadcrumbs: [{ id: null, name: "All Files", href: "/dashboard" }],
     files: [],
     loading: true,
     error: null,
@@ -39,6 +39,7 @@ export function useFolderData(folderId: string | null): FolderData {
         ...cachedData.contents.folders.map(folder => ({
           ...folder,
           type: 'folder' as const,
+          tags: folder.tags,
           folder_id: folder.parent_id || undefined,
         })),
         ...cachedData.contents.files.map(file => ({
@@ -74,6 +75,7 @@ export function useFolderData(folderId: string | null): FolderData {
           ...cachedData.contents.folders.map(folder => ({
             ...folder,
             type: 'folder' as const,
+            tags: folder.tags,
             folder_id: folder.parent_id || undefined,
           })),
           ...cachedData.contents.files.map(file => ({
@@ -102,6 +104,7 @@ export function useFolderData(folderId: string | null): FolderData {
         ...cachedData.contents.folders.map(folder => ({
           ...folder,
           type: 'folder' as const,
+          tags: folder.tags,
           folder_id: folder.parent_id || undefined,
         })),
         ...cachedData.contents.files.map(file => ({
@@ -135,6 +138,7 @@ export function useFolderData(folderId: string | null): FolderData {
           ...cachedData.contents.folders.map(folder => ({
             ...folder,
             type: 'folder' as const,
+            tags: folder.tags,
             folder_id: folder.parent_id || undefined,
           })),
           ...cachedData.contents.files.map(file => ({
@@ -165,6 +169,7 @@ export function useFolderData(folderId: string | null): FolderData {
           ...cachedData.contents.folders.map(folder => ({
             ...folder,
             type: 'folder' as const,
+            tags: folder.tags,
             folder_id: folder.parent_id || undefined,
           })),
           ...cachedData.contents.files.map(file => ({
@@ -196,6 +201,94 @@ export function useFolderData(folderId: string | null): FolderData {
       // Fetch from centralized API
       const result: FolderDataResponse = await folderApi.getFolderData(token, folderId || undefined);
 
+      // Add placeholder files for testing (TODO: Remove when backend supports files)
+      const placeholderFiles: FileItem[] = [
+        {
+          id: 'file-1',
+          name: 'Meeting Recording.mp4',
+          type: 'video',
+          size: 1024000000, // 1GB
+          length: '45:32',
+          language: ['English', 'Spanish'], // Multilingual meeting
+          service: 'OpenAI Whisper',
+          tags: [
+            { id: 'tag-1', name: 'Meeting', item_id: 'file-1', item_type: 'file', user_id: '', created_at: '', updated_at: '' },
+            { id: 'tag-2', name: 'Work', item_id: 'file-1', item_type: 'file', user_id: '', created_at: '', updated_at: '' }
+          ],
+          created_at: '2024-01-15T10:30:00Z',
+          folder_id: folderId || undefined,
+        },
+        {
+          id: 'file-2',
+          name: 'Interview.wav',
+          type: 'audio',
+          size: 256000000, // 256MB
+          length: '1:23:45',
+          language: 'English',
+          service: 'Deepgram',
+          tags: [
+            { id: 'tag-3', name: 'Interview', item_id: 'file-2', item_type: 'file', user_id: '', created_at: '', updated_at: '' }
+          ],
+          created_at: '2024-01-20T14:15:00Z',
+          folder_id: folderId || undefined,
+        },
+        {
+          id: 'file-3',
+          name: 'Lecture Notes.txt',
+          type: 'text',
+          size: 1024000, // 1MB
+          language: ['Spanish', 'English', 'Portuguese'], // Multilingual content
+          tags: [
+            { id: 'tag-4', name: 'Education', item_id: 'file-3', item_type: 'file', user_id: '', created_at: '', updated_at: '' },
+            { id: 'tag-5', name: 'Multilingual', item_id: 'file-3', item_type: 'file', user_id: '', created_at: '', updated_at: '' }
+          ],
+          created_at: '2024-02-01T09:00:00Z',
+          folder_id: folderId || undefined,
+        },
+        {
+          id: 'file-4',
+          name: 'Podcast Episode 15.mp3',
+          type: 'audio',
+          size: 128000000, // 128MB
+          length: '58:12',
+          language: 'French',
+          service: 'Azure Speech',
+          tags: [
+            { id: 'tag-6', name: 'Podcast', item_id: 'file-4', item_type: 'file', user_id: '', created_at: '', updated_at: '' }
+          ],
+          created_at: '2024-02-10T16:45:00Z',
+          folder_id: folderId || undefined,
+        },
+        {
+          id: 'file-5',
+          name: 'Conference Call.webm',
+          type: 'video',
+          size: 512000000, // 512MB
+          length: '2:15:30',
+          language: ['German', 'English'], // Mixed language call
+          service: 'Google Speech-to-Text',
+          created_at: '2024-02-15T11:20:00Z',
+          folder_id: folderId || undefined,
+        },
+        {
+          id: 'file-6',
+          name: 'International Webinar.mp4',
+          type: 'video',
+          size: 768000000, // 768MB
+          length: '1:45:20',
+          language: ['English', 'French', 'German', 'Spanish'], // Highly multilingual
+          service: 'OpenAI Whisper',
+          tags: [
+            { id: 'tag-7', name: 'Webinar', item_id: 'file-6', item_type: 'file', user_id: '', created_at: '', updated_at: '' },
+            { id: 'tag-8', name: 'International', item_id: 'file-6', item_type: 'file', user_id: '', created_at: '', updated_at: '' }
+          ],
+          created_at: '2024-02-20T13:30:00Z',
+          folder_id: folderId || undefined,
+        }
+      ];
+
+      // Add placeholder files to the result
+      result.contents.files = [...result.contents.files, ...placeholderFiles];
       
       // Cache the result
       folderDataCache.set(cacheKey, result);
@@ -206,6 +299,7 @@ export function useFolderData(folderId: string | null): FolderData {
           id: folder.id,
           name: folder.name,
           type: 'folder' as const,
+          tags: folder.tags,
           created_at: folder.created_at,
           folder_id: folder.parent_id || undefined,
         })),
@@ -433,7 +527,26 @@ export function addFolderToTreeCache(newFolder: Folder) {
 
 export function removeFolderFromTreeCache(folderId: string) {
   if (folderTreeCache) {
-    folderTreeCache = folderTreeCache.filter(f => f.id !== folderId);
+    // Helper function to recursively find all child folder IDs
+    const findAllChildIds = (parentId: string, allFolders: Folder[]): string[] => {
+      const childIds: string[] = [];
+      const children = allFolders.filter(f => f.parent_id === parentId);
+      
+      children.forEach(child => {
+        childIds.push(child.id);
+        // Recursively find grandchildren
+        childIds.push(...findAllChildIds(child.id, allFolders));
+      });
+      
+      return childIds;
+    };
+
+    // Find all descendant folder IDs (including the folder itself)
+    const allFolderIdsToRemove = [folderId, ...findAllChildIds(folderId, folderTreeCache)];
+    
+    // Remove the folder and all its descendants
+    folderTreeCache = folderTreeCache.filter(f => !allFolderIdsToRemove.includes(f.id));
+    
     // Notify listeners of cache change
     folderTreeUpdateListeners.forEach(listener => listener());
   }

@@ -245,11 +245,12 @@ export function FolderTree({ title = "Folders" }: FolderTreeProps) {
       <SidebarGroup>
         <SidebarGroupLabel>{title}</SidebarGroupLabel>
         <SidebarMenu>
-          <SidebarMenuItem>
-            <div className="flex items-center justify-center py-4">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-amber-600"></div>
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="flex h-8 items-center gap-2 rounded-md px-2">
+              <div className="size-4 rounded-md bg-muted animate-pulse" />
+              <div className="h-4 bg-muted rounded flex-1 animate-pulse" style={{ width: '70%' }} />
             </div>
-          </SidebarMenuItem>
+          ))}
         </SidebarMenu>
       </SidebarGroup>
     );
@@ -267,11 +268,11 @@ export function FolderTree({ title = "Folders" }: FolderTreeProps) {
               setOpenMobile(false);
             }}
             isActive={pathname === '/dashboard'}
-            tooltip="Dashboard"
+            tooltip="All Files"
             className="hover:bg-amber-100/30 data-[active=true]:bg-amber-200/30"
           >
             <FolderOpen className="w-4 h-4" />
-            <span className="text-sm">Dashboard</span>
+            <span className="text-sm">All Files</span>
           </SidebarMenuButton>
         </SidebarMenuItem>
 

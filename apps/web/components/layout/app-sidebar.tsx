@@ -92,8 +92,24 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarContent>
       <SidebarFooter className="bg-amber-50/20">
         {loading ? (
-          <div className="flex items-center justify-center p-4">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-amber-600"></div>
+          <div className="space-y-4 p-4">
+            {/* Plan and Quota Skeletons */}
+            <div className="space-y-2">
+              <div className="h-3 w-12 bg-muted rounded animate-pulse"></div>
+              <div className="space-y-2">
+                <div className="h-10 w-full bg-muted rounded-lg animate-pulse"></div>
+                <div className="h-10 w-full bg-muted rounded-lg animate-pulse"></div>
+              </div>
+            </div>
+            
+            {/* User Profile Skeleton */}
+            <div className="flex items-center gap-3 p-2">
+              <div className="h-8 w-8 bg-muted rounded-full animate-pulse"></div>
+              <div className="flex-1 space-y-1">
+                <div className="h-4 w-20 bg-muted rounded animate-pulse"></div>
+                <div className="h-3 w-24 bg-muted rounded animate-pulse"></div>
+              </div>
+            </div>
           </div>
         ) : error ? (
           <div className="p-4 text-xs text-red-600">

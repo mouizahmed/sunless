@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { folderApi, ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -86,13 +87,17 @@ export function RenameFolderDialog({
       // Reset form and close dialog
       setFolderName("");
       onOpenChange(false);
+      toast.success('Folder renamed successfully');
     } catch (error) {
       console.error("Failed to rename folder:", error);
       if (error instanceof ApiError) {
         // Handle specific API errors with better messages
         setFolderError(error.message);
+        toast.error(error.message);
       } else {
-        setFolderError(error instanceof Error ? error.message : "Failed to rename folder. Please try again.");
+        const errorMessage = error instanceof Error ? error.message : "Failed to rename folder. Please try again.";
+        setFolderError(errorMessage);
+        toast.error('Failed to rename folder');
       }
     } finally {
       setIsLoading(false);
@@ -156,7 +161,7 @@ export function RenameFolderDialog({
             >
               {isLoading ? (
                 <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                  <div className="w-4 h-4 bg-white/30 rounded animate-pulse mr-2" />
                   Renaming...
                 </>
               ) : (

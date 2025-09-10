@@ -24,7 +24,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "Authentication required", 
+				"error":   "Authentication required",
 				"message": "Missing Authorization header. Please include 'Authorization: Bearer <token>' in your request.",
 			})
 			c.Abort()
@@ -35,7 +35,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		tokenParts := strings.Split(authHeader, " ")
 		if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
 			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "Invalid authorization format", 
+				"error":   "Invalid authorization format",
 				"message": "Authorization header must be in format 'Bearer <token>'. Received: " + authHeader,
 			})
 			c.Abort()
@@ -49,7 +49,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		if clerkSecretKey == "" {
 			log.Printf("CLERK_SECRET_KEY not set")
 			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "Server configuration error", 
+				"error":   "Server configuration error",
 				"message": "Authentication service is not properly configured. Please contact support.",
 			})
 			c.Abort()
@@ -80,7 +80,7 @@ func AuthMiddleware() gin.HandlerFunc {
 			if err != nil {
 				// Provide specific error messages based on the error type
 				var errorMsg, userMsg string
-				
+
 				if strings.Contains(err.Error(), "token is expired") {
 					errorMsg = "Token expired"
 					userMsg = "Your session has expired. Please sign in again."
@@ -97,10 +97,10 @@ func AuthMiddleware() gin.HandlerFunc {
 					errorMsg = "Token validation failed"
 					userMsg = "Authentication failed. Please sign in again."
 				}
-				
+
 				log.Printf("JWT verification failed: %v", err)
 				c.JSON(http.StatusUnauthorized, gin.H{
-					"error": errorMsg,
+					"error":   errorMsg,
 					"message": userMsg,
 				})
 				c.Abort()
@@ -113,7 +113,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		if userID == "" {
 			log.Printf("No user ID found in JWT claims")
 			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "Invalid token claims",
+				"error":   "Invalid token claims",
 				"message": "Token is missing required user information. Please sign in again.",
 			})
 			c.Abort()

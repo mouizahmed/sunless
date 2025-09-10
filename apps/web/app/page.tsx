@@ -1,5 +1,6 @@
 import Footer from "@/components/landing/footer";
 import Navbar from "@/components/landing/navbar";
+import Image from "next/image";
 
 export default function Home() {
   return (
@@ -230,7 +231,7 @@ export default function Home() {
               { t: "Journalists", span: "md:col-span-2", c: "from-fuchsia-400/20 to-pink-500/20" },
               { t: "Researchers", span: "md:col-span-2", c: "from-amber-400/25 to-orange-500/20" },
               { t: "Creators", span: "md:col-span-2", c: "from-sky-400/20 to-blue-500/20" },
-            ].map(({ t, span, c }) => (
+            ].map(({ t, span }) => (
               <div
                 key={t}
                 className={`${span} relative overflow-hidden rounded-2xl border border-zinc-200 bg-white p-6 transition hover:-translate-y-1 hover:shadow`}
@@ -274,9 +275,11 @@ export default function Home() {
               <figure key={i} className="rounded-2xl border border-zinc-200 bg-white p-6">
                 <blockquote className="text-pretty text-lg text-zinc-700">“{t.q}”</blockquote>
                 <figcaption className="mt-5 flex items-center gap-3 text-sm text-zinc-500">
-                  <img
+                  <Image
                     src="/avatars/default-user.jpg"
                     alt="avatar"
+                    width={32}
+                    height={32}
                     className="h-8 w-8 rounded-full object-cover"
                   />
                   <span>{t.n}</span>

@@ -20,17 +20,15 @@ import { Folder } from "@/types/folder";
 import { FolderIcon, Plus, FolderOpen } from "lucide-react";
 
 interface FolderSelectorProps {
-  selectedFolderId: string | null;
-  selectedFolderName: string;
-  onFolderChange: (folderId: string | null, folderName: string) => void;
+  selectedFolder: Folder | null;
+  onFolderChange: (folder: Folder | null) => void;
   title?: string;
   description?: string;
   className?: string;
 }
 
 export function FolderSelector({
-  selectedFolderId,
-  selectedFolderName,
+  selectedFolder,
   onFolderChange,
   title = "Destination Folder",
   description = "Choose where to save your items",
@@ -63,15 +61,14 @@ export function FolderSelector({
   }, [getToken]);
 
   const handleFolderSelect = (folderId: string | null) => {
-    const folder = folders.find(f => f.id === folderId);
-    const folderName = folder?.name || "Dashboard";
-    onFolderChange(folderId, folderName);
+    const folder = folders.find(f => f.id === folderId) || null;
+    onFolderChange(folder);
     setShowFolderSelector(false);
   };
   
   const handleFolderCreated = (newFolder: Folder) => {
     setFolders(prev => [...prev, newFolder]);
-    onFolderChange(newFolder.id, newFolder.name);
+    onFolderChange(newFolder);
   };
 
   return (
@@ -89,14 +86,14 @@ export function FolderSelector({
         <CardContent>
           <div className="flex items-center gap-3">
             <div className="flex-1">
-              <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/50">
+              <div className="flex items-center gap-2 p-2 border rounded-lg bg-muted/50">
                 <FolderOpen className="w-4 h-4 text-muted-foreground" />
-                <span className="font-medium">{selectedFolderName}</span>
+                <span className="font-medium">{selectedFolder?.name || "All Files"}</span>
               </div>
             </div>
             <Dialog open={showFolderSelector} onOpenChange={setShowFolderSelector}>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
+                <Button variant="outline">
                   Change
                 </Button>
               </DialogTrigger>
@@ -109,13 +106,18 @@ export function FolderSelector({
                 </DialogHeader>
                 <div className="py-4">
                   {foldersLoading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+                    <div className="space-y-2 py-4">
+                      {[...Array(5)].map((_, i) => (
+                        <div key={i} className="flex items-center gap-2 p-2">
+                          <div className="w-4 h-4 bg-muted rounded animate-pulse"></div>
+                          <div className="h-4 bg-muted rounded flex-1 animate-pulse"></div>
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <FolderTreeSelector
                       folders={folders}
-                      selectedFolderId={selectedFolderId}
+                      selectedFolderId={selectedFolder?.id || null}
                       onSelectFolder={handleFolderSelect}
                     />
                   )}
@@ -143,8 +145,8 @@ export function FolderSelector({
       <FolderDialog
         open={showCreateFolder}
         onOpenChange={setShowCreateFolder}
-        parentFolderId={selectedFolderId}
-        parentFolderName={selectedFolderName}
+        parentFolderId={selectedFolder?.id || null}
+        parentFolderName={selectedFolder?.name || "All Files"}
         onFolderCreated={handleFolderCreated}
       />
     </div>

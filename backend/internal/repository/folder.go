@@ -10,14 +10,42 @@ import (
 )
 
 type FolderRepository struct {
-	db *database.DB
+	db      *database.DB
+	tagRepo *TagRepository
 }
 
-func NewFolderRepository(db *database.DB) *FolderRepository {
-	return &FolderRepository{db: db}
+func NewFolderRepository(db *database.DB, tagRepo *TagRepository) *FolderRepository {
+	return &FolderRepository{
+		db:      db,
+		tagRepo: tagRepo,
+	}
 }
 
-// GetFolderByID retrieves a folder by its ID and user ID
+// Helper method to populate tags for a folder
+func (r *FolderRepository) populateTags(folder *models.Folder) error {
+	if folder == nil {
+		return nil
+	}
+
+	tags, err := r.tagRepo.GetTagsForItem(folder.ID, "folder", folder.UserID)
+	if err != nil {
+		return err
+	}
+
+	folder.Tags = tags
+	return nil
+}
+
+// Helper method to populate tags for multiple folders
+func (r *FolderRepository) populateTagsForFolders(folders []models.Folder) error {
+	for i := range folders {
+		if err := r.populateTags(&folders[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (r *FolderRepository) GetFolderByID(folderID, userID string) (*models.Folder, error) {
 	query := `
 		SELECT id, name, parent_id, user_id, created_at, updated_at, deleted_at
@@ -39,21 +67,24 @@ func (r *FolderRepository) GetFolderByID(folderID, userID string) (*models.Folde
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
-		}
-		if strings.Contains(err.Error(), "connection") {
+		} else if strings.Contains(err.Error(), "connection") {
 			return nil, fmt.Errorf("database connection error: unable to connect to database")
 		}
+
 		return nil, fmt.Errorf("database query error: failed to retrieve folder")
+	}
+
+	// Populate tags from tags table
+	if err := r.populateTags(&folder); err != nil {
+		return nil, fmt.Errorf("failed to load folder tags: %w", err)
 	}
 
 	return &folder, nil
 }
 
-// GetBreadcrumbs builds the breadcrumb path for a folder
 func (r *FolderRepository) GetBreadcrumbs(folderID, userID string) ([]models.Breadcrumb, error) {
-	// Always start with Dashboard (root level)
 	breadcrumbs := []models.Breadcrumb{
-		{ID: nil, Name: "Dashboard", Href: "/dashboard"},
+		{ID: nil, Name: "All Files", Href: "/dashboard"},
 	}
 
 	// If folderID is empty, we're at root/dashboard level
@@ -155,6 +186,11 @@ func (r *FolderRepository) GetFolderContents(folderID, userID string) (*models.F
 		contents.Folders = append(contents.Folders, folder)
 	}
 
+	// Populate tags for all folders
+	if err := r.populateTagsForFolders(contents.Folders); err != nil {
+		return nil, fmt.Errorf("failed to load folder tags: %w", err)
+	}
+
 	// TODO: Add files later - for now only handling folders
 	// Files array will remain empty but that's fine for dashboard
 
@@ -242,6 +278,11 @@ func (r *FolderRepository) GetAllUserFolders(userID string) ([]models.Folder, er
 		folders = append(folders, folder)
 	}
 
+	// Populate tags for all folders
+	if err := r.populateTagsForFolders(folders); err != nil {
+		return nil, fmt.Errorf("failed to load folder tags: %w", err)
+	}
+
 	return folders, nil
 }
 
@@ -262,7 +303,7 @@ func (r *FolderRepository) UpdateFolder(folderID, name, userID string) (*models.
 		WHERE id = $2 AND user_id = $3 AND deleted_at IS NULL
 		RETURNING id, name, parent_id, user_id, created_at, updated_at
 	`
-	
+
 	var folder models.Folder
 	err = r.db.QueryRow(query, name, folderID, userID).Scan(
 		&folder.ID,
@@ -272,17 +313,22 @@ func (r *FolderRepository) UpdateFolder(folderID, name, userID string) (*models.
 		&folder.CreatedAt,
 		&folder.UpdatedAt,
 	)
-	
+
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
 			return nil, fmt.Errorf("folder already exists: a folder with this name already exists in this location")
-		}
-		if strings.Contains(err.Error(), "connection") {
+		} else if strings.Contains(err.Error(), "connection") {
 			return nil, fmt.Errorf("database connection error: unable to connect to database")
 		}
+
 		return nil, fmt.Errorf("database error: failed to update folder")
 	}
-	
+
+	// Populate tags from tags table
+	if err := r.populateTags(&folder); err != nil {
+		return nil, fmt.Errorf("failed to load folder tags: %w", err)
+	}
+
 	return &folder, nil
 }
 
@@ -293,7 +339,7 @@ func (r *FolderRepository) CreateFolder(name string, parentID *string, userID st
 		VALUES ($1, $2, $3, NOW(), NOW())
 		RETURNING id, name, parent_id, user_id, created_at, updated_at
 	`
-	
+
 	var folder models.Folder
 	err := r.db.QueryRow(query, name, parentID, userID).Scan(
 		&folder.ID,
@@ -303,24 +349,26 @@ func (r *FolderRepository) CreateFolder(name string, parentID *string, userID st
 		&folder.CreatedAt,
 		&folder.UpdatedAt,
 	)
-	
+
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
 			return nil, fmt.Errorf("folder already exists: a folder with this name already exists in this location")
-		}
-		if strings.Contains(err.Error(), "foreign key") {
+		} else if strings.Contains(err.Error(), "foreign key") {
 			return nil, fmt.Errorf("invalid parent folder: the specified parent folder does not exist")
-		}
-		if strings.Contains(err.Error(), "connection") {
+		} else if strings.Contains(err.Error(), "connection") {
 			return nil, fmt.Errorf("database connection error: unable to connect to database")
 		}
+
 		return nil, fmt.Errorf("database error: failed to create folder")
 	}
-	
+
+	// Initialize empty tags (no tags on creation)
+	folder.Tags = []models.Tag{}
+
 	return &folder, nil
 }
 
-// DeleteFolder soft deletes a folder by setting deleted_at timestamp
+// DeleteFolder soft deletes a folder and all its descendants by setting deleted_at timestamp
 func (r *FolderRepository) DeleteFolder(folderID, userID string) error {
 	// First check if the folder exists and belongs to the user
 	existingFolder, err := r.GetFolderByID(folderID, userID)
@@ -331,55 +379,62 @@ func (r *FolderRepository) DeleteFolder(folderID, userID string) error {
 		return fmt.Errorf("folder not found")
 	}
 
+	// Use recursive CTE to soft delete the folder and all its descendants
 	query := `
+		WITH RECURSIVE folder_tree AS (
+			-- Base case: start with the folder to delete
+			SELECT id, parent_id
+			FROM folders
+			WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+			
+			UNION ALL
+			
+			-- Recursive case: get all descendant folders
+			SELECT f.id, f.parent_id
+			FROM folders f
+			INNER JOIN folder_tree ft ON f.parent_id = ft.id
+			WHERE f.user_id = $2 AND f.deleted_at IS NULL
+		)
 		UPDATE folders 
 		SET deleted_at = NOW(), updated_at = NOW()
-		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+		WHERE id IN (SELECT id FROM folder_tree) AND user_id = $2
 	`
-	
+
 	result, err := r.db.Exec(query, folderID, userID)
 	if err != nil {
 		if strings.Contains(err.Error(), "connection") {
 			return fmt.Errorf("database connection error: unable to connect to database")
 		}
+
 		return fmt.Errorf("database error: failed to delete folder")
 	}
-	
+
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		return fmt.Errorf("database error: failed to verify deletion")
-	}
-	
-	if rowsAffected == 0 {
+	} else if rowsAffected == 0 {
 		return fmt.Errorf("folder not found or already deleted")
 	}
-	
+
 	return nil
 }
 
 // MoveFolder moves a folder to a new parent location
 func (r *FolderRepository) MoveFolder(folderID, newParentID, userID string) (*models.Folder, error) {
-	// First check if the folder exists and belongs to the user
 	existingFolder, err := r.GetFolderByID(folderID, userID)
 	if err != nil {
 		return nil, err
-	}
-	if existingFolder == nil {
+	} else if existingFolder == nil {
 		return nil, fmt.Errorf("folder not found")
 	}
 
-	// If newParentID is provided, validate it exists and belongs to the user
 	if newParentID != "" {
 		parentFolder, err := r.GetFolderByID(newParentID, userID)
 		if err != nil {
 			return nil, err
-		}
-		if parentFolder == nil {
+		} else if parentFolder == nil {
 			return nil, fmt.Errorf("destination folder not found")
-		}
-
-		// Prevent circular reference - check if newParentID is a descendant of folderID
-		if err := r.validateNoCircularReference(folderID, newParentID, userID); err != nil {
+		} else if err := r.validateNoCircularReference(folderID, newParentID, userID); err != nil {
 			return nil, err
 		}
 	}
@@ -396,7 +451,7 @@ func (r *FolderRepository) MoveFolder(folderID, newParentID, userID string) (*mo
 		WHERE id = $2 AND user_id = $3 AND deleted_at IS NULL
 		RETURNING id, name, parent_id, user_id, created_at, updated_at
 	`
-	
+
 	var folder models.Folder
 	err = r.db.QueryRow(query, parentID, folderID, userID).Scan(
 		&folder.ID,
@@ -406,17 +461,22 @@ func (r *FolderRepository) MoveFolder(folderID, newParentID, userID string) (*mo
 		&folder.CreatedAt,
 		&folder.UpdatedAt,
 	)
-	
+
 	if err != nil {
 		if strings.Contains(err.Error(), "foreign key") {
 			return nil, fmt.Errorf("invalid destination folder: the specified parent folder does not exist")
-		}
-		if strings.Contains(err.Error(), "connection") {
+		} else if strings.Contains(err.Error(), "connection") {
 			return nil, fmt.Errorf("database connection error: unable to connect to database")
 		}
+
 		return nil, fmt.Errorf("database error: failed to move folder")
 	}
-	
+
+	// Populate tags from tags table
+	if err := r.populateTags(&folder); err != nil {
+		return nil, fmt.Errorf("failed to load folder tags: %w", err)
+	}
+
 	return &folder, nil
 }
 
@@ -442,16 +502,15 @@ func (r *FolderRepository) validateNoCircularReference(folderID, newParentID, us
 		FROM descendants
 		WHERE id = $3
 	`
-	
+
 	var count int
 	err := r.db.QueryRow(query, folderID, userID, newParentID).Scan(&count)
+
 	if err != nil {
 		return fmt.Errorf("failed to validate move operation: %w", err)
-	}
-	
-	if count > 0 {
+	} else if count > 0 {
 		return fmt.Errorf("cannot move folder into itself or its descendants")
 	}
-	
+
 	return nil
 }

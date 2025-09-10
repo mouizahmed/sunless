@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Play, Download, Search, MessageSquare, Clock, Users } from "lucide-react";
+import { Download, Search, MessageSquare, Clock, Users } from "lucide-react";
 
 export default function Hero() {
   return (
@@ -94,7 +94,7 @@ export default function Hero() {
                     <span className="text-blue-600 font-medium min-w-16">Sarah</span>
                     <div>
                       <span className="text-gray-400 text-xs cursor-pointer hover:text-blue-600" title="Jump to 02:15">[02:15]</span>
-                      <span className="ml-2">Good morning everyone. Let's start with our 
+                      <span className="ml-2">Good morning everyone. Let&apos;s start with our 
                         <span className="bg-yellow-200 px-1 rounded cursor-pointer hover:bg-yellow-300" title="Jump to 02:18">[02:18] budget</span> 
                         review for Q3. We have some important decisions to make today.</span>
                     </div>
@@ -104,9 +104,9 @@ export default function Hero() {
                     <span className="text-green-600 font-medium min-w-16">Mike</span>
                     <div>
                       <span className="text-gray-400 text-xs cursor-pointer hover:text-blue-600" title="Jump to 02:28">[02:28]</span>
-                      <span className="ml-2">Thanks Sarah. I've prepared the 
+                      <span className="ml-2">Thanks Sarah. I&apos;ve prepared the 
                         <span className="bg-yellow-200 px-1 rounded cursor-pointer hover:bg-yellow-300" title="Jump to 02:32">[02:32] financial projections</span>
-                        for the next quarter. We're looking at a 15% increase in our marketing spend.</span>
+                        for the next quarter. We&apos;re looking at a 15% increase in our marketing spend.</span>
                     </div>
                   </div>
                   
@@ -124,7 +124,7 @@ export default function Hero() {
                     <span className="text-blue-600 font-medium min-w-16">Sarah</span>
                     <div>
                       <span className="text-gray-400 text-xs cursor-pointer hover:text-blue-600" title="Jump to 03:02">[03:02]</span>
-                      <span className="ml-2">Yes, we're on schedule. The development team confirmed the 
+                      <span className="ml-2">Yes, we&apos;re on schedule. The development team confirmed the 
                         <span className="bg-yellow-200 px-1 rounded cursor-pointer hover:bg-yellow-300" title="Jump to 03:08">[03:08] action items</span>
                         from last week are complete. We should be ready for beta testing next month.</span>
                     </div>
@@ -134,7 +134,7 @@ export default function Hero() {
                     <span className="text-green-600 font-medium min-w-16">Mike</span>
                     <div>
                       <span className="text-gray-400 text-xs cursor-pointer hover:text-blue-600" title="Jump to 03:25">[03:25]</span>
-                      <span className="ml-2">Perfect. Let's also discuss the 
+                      <span className="ml-2">Perfect. Let&apos;s also discuss the 
                         <span className="bg-yellow-200 px-1 rounded cursor-pointer hover:bg-yellow-300" title="Jump to 03:28">[03:28] resource allocation</span>
                         for Q4. We might need additional developers for the mobile app.</span>
                     </div>

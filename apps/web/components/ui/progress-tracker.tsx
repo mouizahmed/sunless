@@ -51,16 +51,6 @@ export function ProgressTracker({
     }
   };
 
-  const getProgressColor = () => {
-    switch (status) {
-      case 'completed':
-        return 'bg-green-600';
-      case 'error':
-        return 'bg-red-600';
-      default:
-        return 'bg-blue-600';
-    }
-  };
 
   const getCardContent = () => {
     if (status === 'error') {

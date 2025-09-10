@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { folderApi, ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -29,7 +30,7 @@ export function FolderDialog({
   open, 
   onOpenChange, 
   parentFolderId = null, 
-  parentFolderName = "Dashboard",
+  parentFolderName = "All Files",
   onFolderCreated
 }: FolderDialogProps) {
   const { getToken } = useAuth();
@@ -74,13 +75,17 @@ export function FolderDialog({
       // Reset form and close dialog
       setFolderName("");
       onOpenChange(false);
+      toast.success('Folder created successfully');
     } catch (error) {
       console.error("Failed to create folder:", error);
       if (error instanceof ApiError) {
         // Handle specific API errors with better messages
         setFolderError(error.message);
+        toast.error(error.message);
       } else {
-        setFolderError(error instanceof Error ? error.message : "Failed to create folder. Please try again.");
+        const errorMessage = error instanceof Error ? error.message : "Failed to create folder. Please try again.";
+        setFolderError(errorMessage);
+        toast.error('Failed to create folder');
       }
     } finally {
       setIsLoading(false);
@@ -125,7 +130,7 @@ export function FolderDialog({
             
             {/* Show context info */}
             <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
-              <strong>Location:</strong> {parentFolderName || "Dashboard"}
+              <strong>Location:</strong> {parentFolderName || "All Files"}
               {parentFolderId && (
                 <>
                   <br />
@@ -146,7 +151,7 @@ export function FolderDialog({
             <Button type="submit" disabled={isLoading}>
               {isLoading ? (
                 <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                  <div className="w-4 h-4 bg-white/30 rounded animate-pulse mr-2" />
                   Creating...
                 </>
               ) : (

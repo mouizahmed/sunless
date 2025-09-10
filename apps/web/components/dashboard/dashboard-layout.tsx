@@ -5,7 +5,8 @@ import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PageHeader } from "@/components/ui/page-header";
+import { BulkActions, commonBulkActions } from "@/components/ui/bulk-actions";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,22 +18,19 @@ import {
   Plus, 
   FolderPlus, 
   Upload,
-  X,
-  Download,
-  Move,
   ChevronDown,
   FileAudio,
   Home,
-  Trash
 } from "lucide-react";
-import { FilesTable, FilesTableRef, type FileItem } from "@/components/files-table";
+import { FilesTable, FilesTableRef, type FileItem } from "@/components/table/files-table";
 import type { Folder } from "@/types/folder";
 import { FolderDialog } from "@/components/dialog/create-folder-dialog";
 import { RenameFolderDialog } from "@/components/dialog/rename-folder-dialog";
-import { DeleteFolderDialog } from "@/components/dialog/delete-folder-dialog";
-import { BulkDeleteDialog } from "@/components/dialog/bulk-delete-dialog";
+import { DeleteDialog } from "@/components/dialog/delete-dialog";
 import { MoveFolderDialog } from "@/components/dialog/move-folder-dialog";
 import { useFolderData } from "@/hooks/use-folder-data";
+import { folderApi } from "@/lib/api";
+import { toast } from "sonner";
 import Link from "next/link";
 
 interface DashboardLayoutProps {
@@ -48,9 +46,9 @@ export function DashboardLayout({
   showBreadcrumbs = false,
   emptyStateTitle = "No files yet",
   emptyStateDescription = "Get started by uploading your first file for transcription",
-  parentFolderName = "Dashboard"
+  parentFolderName = "All Files"
 }: DashboardLayoutProps) {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, getToken } = useAuth();
   const router = useRouter();
   const { folder, breadcrumbs, files, loading, error, refetch, updateFolder, addFolder, deleteFolder, moveFolder } = useFolderData(currentFolderId ?? null);
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
@@ -115,20 +113,43 @@ export function DashboardLayout({
     }
   }, [selectedItemsForDelete]);
 
-  const handleBulkDeleteCompleted = useCallback((deletedItemIds: string[]) => {
-    // Remove deleted items from cache and update UI
-    deletedItemIds.forEach(itemId => {
-      const deletedItem = selectedItemsForDelete.find(item => item.id === itemId);
-      if (deletedItem && deletedItem.type === 'folder') {
-        deleteFolder(itemId);
+  const performBulkDelete = useCallback(async () => {
+    const token = await getToken();
+    if (!token) throw new Error('Authentication required');
+
+    const errors: string[] = [];
+    const successfulDeletes: string[] = [];
+
+    // Delete folders (only folders are supported for now)
+    for (const item of selectedItemsForDelete) {
+      if (item.type === 'folder') {
+        try {
+          await folderApi.deleteFolder(token, item.id);
+          successfulDeletes.push(item.id);
+          deleteFolder(item.id);
+        } catch (error) {
+          console.error(`Failed to delete folder ${item.name}:`, error);
+          errors.push(item.name);
+        }
+      } else {
+        errors.push(`${item.name} (files not supported)`);
       }
-    });
-    
-    // Clear selection after successful deletion
+    }
+
+    // Clear selections
     filesTableRef.current?.clearSelection();
     setSelectedItemsForDelete([]);
     setSelectedFiles([]);
-  }, [selectedItemsForDelete, deleteFolder]);
+
+    // Show appropriate toast messages
+    if (successfulDeletes.length > 0) {
+      toast.success(`${successfulDeletes.length} item${successfulDeletes.length !== 1 ? 's' : ''} deleted successfully`);
+    }
+    
+    if (errors.length > 0) {
+      toast.error(`Failed to delete: ${errors.join(', ')}`);
+    }
+  }, [selectedItemsForDelete, deleteFolder, getToken]);
 
   const handleBulkMove = useCallback(() => {
     // Only show move dialog if all selected items are folders
@@ -137,6 +158,51 @@ export function DashboardLayout({
       setIsMoveDialogOpen(true);
     }
   }, [selectedItemsForMove]);
+
+  // Handle tag changes with backend API call
+  const handleTagsChange = useCallback(async (itemId: string, newTags: string[]) => {
+    try {
+      const token = await getToken();
+      if (!token) {
+        toast.error('Authentication required');
+        return;
+      }
+
+      // Find the item to determine if it's a folder or file
+      const item = files.find(f => f.id === itemId);
+      if (!item) {
+        toast.error('Item not found');
+        return;
+      }
+
+      if (item.type === 'folder') {
+        // Update folder tags
+        const response = await folderApi.updateFolderTags(token, itemId, newTags);
+        
+        // Create updated folder object with new tags
+        const updatedFolder: import('@/types/folder').Folder = {
+          id: item.id,
+          name: item.name,
+          parent_id: item.folder_id || null,
+          user_id: '', // This will be set correctly by the context
+          tags: response.tags,
+          created_at: item.created_at,
+          updated_at: new Date().toISOString(),
+        };
+        
+        // Update the cache with the updated folder
+        updateFolder(updatedFolder);
+        
+        toast.success('Folder tags updated successfully');
+      } else {
+        // TODO: Implement file tags when file endpoints are ready
+        toast.error('File tag updates not implemented yet');
+      }
+    } catch (error) {
+      console.error('Failed to update tags:', error);
+      toast.error('Failed to update tags');
+    }
+  }, [files, getToken, updateFolder]);
 
   const handleMoveFoldersCompleted = useCallback((movedFolders: { folderId: string; oldParentId: string | null; newParentId: string | null; updatedFolder: Folder }[]) => {
     // Update cache for moved folders
@@ -164,22 +230,90 @@ export function DashboardLayout({
   // Show loading state while Clerk is loading
   if (!isLoaded) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="flex-1 flex flex-col min-w-0">
+        <PageHeader
+          loading={true}
+          loadingLeftWidth="w-32"
+          loadingRightWidths={["w-32", "w-24"]}
+        />
+
+        {/* Main content area */}
+        <main className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-x-auto">
+            <div className="h-full p-4 pb-20 relative">
+              <div className="animate-pulse space-y-4">
+                {/* Table header */}
+                <div className="flex space-x-4 p-4 border-b">
+                  <div className="h-4 bg-muted rounded w-4"></div>
+                  <div className="h-4 bg-muted rounded w-32"></div>
+                  <div className="h-4 bg-muted rounded w-16"></div>
+                  <div className="h-4 bg-muted rounded w-24"></div>
+                  <div className="h-4 bg-muted rounded w-20"></div>
+                  <div className="h-4 bg-muted rounded w-16"></div>
+                </div>
+                
+                {/* Table rows */}
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="flex space-x-4 p-4 border-b">
+                    <div className="h-4 bg-muted rounded w-4"></div>
+                    <div className="h-4 bg-muted rounded w-32"></div>
+                    <div className="h-4 bg-muted rounded w-16"></div>
+                    <div className="h-4 bg-muted rounded w-24"></div>
+                    <div className="h-4 bg-muted rounded w-20"></div>
+                    <div className="h-4 bg-muted rounded w-16"></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
     );
   }
 
-  // Don't render anything if not authenticated
   if (isLoaded && !isSignedIn) {
     return null;
   }
 
-  // Show loading state for data
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="flex-1 flex flex-col min-w-0">
+        <PageHeader
+          loading={true}
+          loadingLeftWidth="w-32"
+          loadingRightWidths={["w-32", "w-24"]}
+        />
+
+        {/* Main content area */}
+        <main className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-x-auto">
+            <div className="h-full p-4 pb-20 relative">
+              <div className="animate-pulse space-y-4">
+                {/* Table header */}
+                <div className="flex space-x-4 p-4 border-b">
+                  <div className="h-4 bg-muted rounded w-4"></div>
+                  <div className="h-4 bg-muted rounded w-32"></div>
+                  <div className="h-4 bg-muted rounded w-16"></div>
+                  <div className="h-4 bg-muted rounded w-24"></div>
+                  <div className="h-4 bg-muted rounded w-20"></div>
+                  <div className="h-4 bg-muted rounded w-16"></div>
+                </div>
+                
+                {/* Table rows */}
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="flex space-x-4 p-4 border-b">
+                    <div className="h-4 bg-muted rounded w-4"></div>
+                    <div className="h-4 bg-muted rounded w-32"></div>
+                    <div className="h-4 bg-muted rounded w-16"></div>
+                    <div className="h-4 bg-muted rounded w-24"></div>
+                    <div className="h-4 bg-muted rounded w-20"></div>
+                    <div className="h-4 bg-muted rounded w-16"></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
     );
   }
@@ -200,13 +334,10 @@ export function DashboardLayout({
 
   return (
     <div className="flex-1 flex flex-col min-w-0">
-      {/* Header */}
-      <header className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="flex h-14 items-center gap-2 px-4 sm:px-6">
-          <SidebarTrigger className="shrink-0 md:hidden" />
-          <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
-            {/* Breadcrumb Navigation */}
-            {showBreadcrumbs && (
+      <PageHeader
+        leftContent={
+          <>
+            {showBreadcrumbs ? (
               <div className="flex items-center gap-2 min-w-0">
                 {breadcrumbs.map((breadcrumb, index) => (
                   <React.Fragment key={breadcrumb.href}>
@@ -231,129 +362,69 @@ export function DashboardLayout({
                   </React.Fragment>
                 ))}
               </div>
-            )}
-
-            <div className="flex items-center gap-2">
-              {/* Search */}
-              <div className="flex-1 min-w-0 max-w-sm">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search files..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 w-full text-sm"
-                  />
-                </div>
+            ) : (
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-muted-foreground">{folder?.name || parentFolderName}</span>
               </div>
-              
-              {selectedFiles.length > 0 ? (
-                <>
-                  {/* Selection actions - Desktop */}
-                  <div className="hidden sm:flex items-center space-x-2 shrink-0">
-                    <Button variant="outline" size="sm" onClick={handleClearSelection}>
-                      <X className="w-4 h-4 mr-1" />
-                      All selected
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      <Download className="w-4 h-4 mr-1" />
-                      Export
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={handleBulkMove}
-                      disabled={!allSelectedAreFolders}
-                    >
-                      <Move className="w-4 h-4 mr-1" />
-                      Move
-                    </Button>
-                    <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700" onClick={handleBulkDelete}>
-                      <Trash className="w-4 h-4 mr-1" />
-                      Delete
-                    </Button>
+            )}
+          </>
+        }
+        rightContent={
+          <>
+            {selectedFiles.length > 0 ? (
+              <BulkActions
+                selectedCount={selectedFiles.length}
+                onClear={handleClearSelection}
+                actions={[
+                  commonBulkActions.export(() => {}), // TODO: Implement export
+                  commonBulkActions.move(handleBulkMove, !allSelectedAreFolders),
+                  commonBulkActions.delete(handleBulkDelete),
+                ]}
+              />
+            ) : (
+              <>
+                {/* Search */}
+                <div className="flex-1 min-w-0 max-w-sm">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search files..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10 w-full text-sm"
+                    />
                   </div>
-                  
-                  {/* Selection actions - Mobile */}
-                  <div className="flex sm:hidden items-center space-x-1 shrink-0">
-                    <Button variant="outline" size="sm" onClick={handleClearSelection}>
-                      <X className="w-4 h-4" />
+                </div>
+                
+                {/* Create Actions */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="sm">
+                      <Plus className="w-4 h-4 mr-1" />
+                      Create
+                      <ChevronDown className="w-4 h-4 ml-1" />
                     </Button>
-                    <Button variant="outline" size="sm">
-                      <Download className="w-4 h-4" />
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={handleBulkMove}
-                      disabled={!allSelectedAreFolders}
-                    >
-                      <Move className="w-4 h-4" />
-                    </Button>
-                    <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700" onClick={handleBulkDelete}>
-                      <Trash className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {/* Default create actions - Desktop */}
-                  <div className="hidden sm:flex items-center space-x-2 shrink-0">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button size="sm">
-                          <Plus className="w-4 h-4 mr-1" />
-                          Create
-                          <ChevronDown className="w-4 h-4 ml-1" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem asChild>
-                          <Link href="/dashboard/create" className="flex items-center">
-                            <FileAudio className="w-4 h-4 mr-2" />
-                            New Transcript
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <button className="flex items-center w-full" onClick={() => setIsCreateFolderOpen(true)}>
-                            <FolderPlus className="w-4 h-4 mr-2" />
-                            New Folder
-                          </button>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                  
-                  {/* Default create actions - Mobile */}
-                  <div className="flex sm:hidden items-center space-x-1 shrink-0">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button size="sm">
-                          <Plus className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem asChild>
-                          <Link href="/dashboard/create" className="flex items-center">
-                            <FileAudio className="w-4 h-4 mr-2" />
-                            New Transcript
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <button className="flex items-center w-full" onClick={() => setIsCreateFolderOpen(true)}>
-                            <FolderPlus className="w-4 h-4 mr-2" />
-                            New Folder
-                          </button>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem asChild>
+                      <Link href="/dashboard/create" className="flex items-center">
+                        <FileAudio className="w-4 h-4 mr-2" />
+                        New Transcript
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <button className="flex items-center w-full" onClick={() => setIsCreateFolderOpen(true)}>
+                        <FolderPlus className="w-4 h-4 mr-2" />
+                        New Folder
+                      </button>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            )}
+          </>
+        }
+      />
 
       {/* Main content area */}
       <main className="flex-1 flex flex-col overflow-hidden">
@@ -368,6 +439,7 @@ export function DashboardLayout({
                 onFolderRename={handleFolderRename}
                 onFolderDelete={handleFolderDelete}
                 onFolderMove={handleSingleFolderMove}
+                onTagsChange={handleTagsChange}
               />
             </div>
           </div>
@@ -439,22 +511,29 @@ export function DashboardLayout({
 
       {/* Delete Folder Dialog */}
       {selectedFolderForDelete && (
-        <DeleteFolderDialog 
+        <DeleteDialog 
           open={isDeleteFolderOpen}
           onOpenChange={setIsDeleteFolderOpen}
-          folderId={selectedFolderForDelete.id}
-          folderName={selectedFolderForDelete.name}
-          onFolderDeleted={deleteFolder}
+          items={[{ name: selectedFolderForDelete.name }]}
+          onDelete={async () => {
+            const token = await getToken();
+            if (!token) throw new Error('Authentication required');
+            await folderApi.deleteFolder(token, selectedFolderForDelete.id);
+            deleteFolder(selectedFolderForDelete.id);
+            toast.success('Folder deleted successfully');
+          }}
         />
       )}
 
       {/* Bulk Delete Dialog */}
-      <BulkDeleteDialog 
-        open={isBulkDeleteOpen}
-        onOpenChange={setIsBulkDeleteOpen}
-        selectedItems={selectedItemsForDelete}
-        onItemsDeleted={handleBulkDeleteCompleted}
-      />
+      {selectedItemsForDelete.length > 0 && (
+        <DeleteDialog
+          open={isBulkDeleteOpen}
+          onOpenChange={setIsBulkDeleteOpen}
+          items={selectedItemsForDelete}
+          onDelete={performBulkDelete}
+        />
+      )}
 
       {/* Move Folder Dialog */}
       <MoveFolderDialog 
