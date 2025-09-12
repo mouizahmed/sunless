@@ -20,13 +20,16 @@ function TopBar({
   showSearchBar = false,
   showNewNoteButton = false,
 }: TopBarProps) {
+  const isMacOS = navigator.platform.toLowerCase().includes('mac');
+  
   return (
     <div
       className="h-12 w-full flex items-center justify-between px-4 text-white text-sm absolute top-0 left-0 z-40 bg-background"
       style={
         {
           WebkitAppRegion: "drag",
-          paddingRight: "140px",
+          paddingLeft: isMacOS ? "80px" : "4px",
+          paddingRight: isMacOS ? "4px" : "140px",
         } as React.CSSProperties
       }
     >
