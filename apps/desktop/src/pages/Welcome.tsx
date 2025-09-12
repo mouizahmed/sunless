@@ -1,9 +1,20 @@
+import React, { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { useTopBar } from "@/contexts/TopBarContext";
 
 function Welcome() {
+  const { setConfig } = useTopBar();
+
+  useEffect(() => {
+    // Welcome page has no additional TopBar features
+    setConfig({});
+  }, [setConfig]);
   return (
-    <div className="flex flex-col items-center justify-center h-full p-8 overflow-hidden">
+    <div 
+      className="flex flex-col items-center justify-center h-full p-8 overflow-hidden"
+      style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+    >
       <img src="/logo.png" alt="Sunless Logo" className="w-20 h-20 mb-8" />
 
       <h1 className="text-4xl font-semibold text-center mb-8 leading-tight">
@@ -12,9 +23,12 @@ function Welcome() {
         into light
       </h1>
 
-      <div className="flex flex-col gap-4 w-72 mb-8">
+      <div 
+        className="flex flex-col gap-4 w-72 mb-8"
+        style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+      >
         <Link to="/signin">
-          <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 text-base">
+          <Button className="w-full py-3 text-base text-white" style={{ backgroundColor: '#8f87a6' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#746c89'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#8f87a6'}>
             Sign In
           </Button>
         </Link>
@@ -22,19 +36,16 @@ function Welcome() {
         <Link to="/signup">
           <Button
             variant="outline"
-            className="w-full border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white py-3 text-base"
+            className="w-full py-3 text-base" 
+            style={{ borderColor: '#8f87a6', color: '#8f87a6' }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#8f87a6'; e.currentTarget.style.color = '#ffffff'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#8f87a6'; }}
           >
             Sign Up
           </Button>
         </Link>
       </div>
 
-      <div className="text-sm opacity-70 text-center">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" className="mr-2" />I agree to the Terms of
-          Service and Privacy Policy
-        </label>
-      </div>
     </div>
   );
 }

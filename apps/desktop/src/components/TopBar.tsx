@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { ArrowLeft, Search, Plus } from "lucide-react";
+import { useWindowState } from "@/hooks/useWindowState";
 
 interface TopBarProps {
   onBack?: () => void;
@@ -20,30 +21,17 @@ function TopBar({
   showSearchBar = false,
   showNewNoteButton = false,
 }: TopBarProps) {
-  const isMacOS = navigator.platform.toLowerCase().includes('mac');
-  const [isMaximized, setIsMaximized] = useState(false);
+  const isMacOS = navigator.platform.toLowerCase().includes("mac");
+  const { isMaximized } = useWindowState();
 
-  useEffect(() => {
-    const handleResize = () => {
-      // Check if window is maximized by comparing with screen dimensions
-      const isMaximizedState = window.innerHeight >= screen.height - 100 && 
-                               window.innerWidth >= screen.width - 100;
-      setIsMaximized(isMaximizedState);
-    };
-
-    handleResize(); // Check initial state
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-  
   return (
     <div
       className="h-12 w-full flex items-center justify-between px-4 text-white text-sm absolute top-0 left-0 z-40 bg-background"
       style={
         {
           WebkitAppRegion: "drag",
-          paddingLeft: (isMacOS && !isMaximized) ? "80px" : "16px",
-          paddingRight: (!isMacOS && !isMaximized) ? "140px" : "16px",
+          paddingLeft: isMacOS && !isMaximized ? "80px" : "16px",
+          paddingRight: !isMacOS && !isMaximized ? "140px" : "16px",
         } as React.CSSProperties
       }
     >
