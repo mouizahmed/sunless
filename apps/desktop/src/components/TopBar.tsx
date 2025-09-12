@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { ArrowLeft, Search, Plus } from "lucide-react";
 
 interface TopBarProps {
@@ -21,6 +21,20 @@ function TopBar({
   showNewNoteButton = false,
 }: TopBarProps) {
   const isMacOS = navigator.platform.toLowerCase().includes('mac');
+  const [isMaximized, setIsMaximized] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      // Check if window is maximized by comparing with screen dimensions
+      const isMaximizedState = window.innerHeight >= screen.height - 100 && 
+                               window.innerWidth >= screen.width - 100;
+      setIsMaximized(isMaximizedState);
+    };
+
+    handleResize(); // Check initial state
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   
   return (
     <div
@@ -28,8 +42,8 @@ function TopBar({
       style={
         {
           WebkitAppRegion: "drag",
-          paddingLeft: isMacOS ? "80px" : "4px",
-          paddingRight: isMacOS ? "4px" : "140px",
+          paddingLeft: (isMacOS && !isMaximized) ? "80px" : "16px",
+          paddingRight: (!isMacOS && !isMaximized) ? "140px" : "16px",
         } as React.CSSProperties
       }
     >
