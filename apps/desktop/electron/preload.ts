@@ -28,3 +28,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   maximize: () => ipcRenderer.invoke('window-maximize'), 
   close: () => ipcRenderer.invoke('window-close')
 })
+
+contextBridge.exposeInMainWorld('env', {
+  platform: process.platform
+})

@@ -1,7 +1,5 @@
 import { HashRouter as Router, Routes, Route } from "react-router-dom";
 import Welcome from "./pages/Welcome";
-import SignIn from "./pages/SignIn";
-import SignUp from "./pages/SignUp";
 import TopBar from "./components/TopBar";
 import { useNavigationHistory } from "./hooks/useNavigationHistory";
 import { TopBarProvider, useTopBar } from "./contexts/TopBarContext";
@@ -32,8 +30,6 @@ function AppLayout() {
       <div className="flex-1 overflow-hidden pt-12">
         <Routes>
           <Route path="/" element={<Welcome />} />
-          <Route path="/signin" element={<SignIn />} />
-          <Route path="/signup" element={<SignUp />} />
         </Routes>
       </div>
     </div>

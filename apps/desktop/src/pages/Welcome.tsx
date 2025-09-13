@@ -1,5 +1,4 @@
 import React, { useEffect } from "react";
-import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useTopBar } from "@/contexts/TopBarContext";
 import Typewriter from "typewriter-effect";
@@ -11,6 +10,14 @@ function Welcome() {
     // Welcome page has no additional TopBar features
     setConfig({});
   }, [setConfig]);
+
+  const handleGoogleAuth = async () => {
+    console.log("Google Auth clicked");
+  };
+
+  const handleMicrosoftAuth = async () => {
+    console.log("Microsoft Auth clicked");
+  };
   return (
     <div
       className="flex flex-col items-center justify-center h-full p-8 overflow-hidden"
@@ -37,38 +44,35 @@ function Welcome() {
         className="flex flex-col gap-4 w-72 mb-8"
         style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
       >
-        <Link to="/signin">
-          <Button
-            className="w-full py-3 text-base text-white"
-            style={{ backgroundColor: "#8f87a6" }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.backgroundColor = "#746c89")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.backgroundColor = "#8f87a6")
-            }
-          >
-            Sign In
-          </Button>
-        </Link>
+        <Button
+          variant="outline"
+          className="w-full py-3 text-base border-input text-card-foreground bg-card hover:bg-accent hover:text-accent-foreground"
+          onClick={handleGoogleAuth}
+        >
+          <img
+            src="/google.svg"
+            alt="Google"
+            width={20}
+            height={20}
+            className="mr-2"
+          />
+          Continue with Google
+        </Button>
 
-        <Link to="/signup">
-          <Button
-            variant="outline"
-            className="w-full py-3 text-base"
-            style={{ borderColor: "#8f87a6", color: "#8f87a6" }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = "#8f87a6";
-              e.currentTarget.style.color = "#ffffff";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = "transparent";
-              e.currentTarget.style.color = "#8f87a6";
-            }}
-          >
-            Sign Up
-          </Button>
-        </Link>
+        <Button
+          variant="outline"
+          className="w-full py-3 text-base border-input text-card-foreground bg-card hover:bg-accent hover:text-accent-foreground"
+          onClick={handleMicrosoftAuth}
+        >
+          <img
+            src="/microsoft.svg"
+            alt="Microsoft"
+            width={20}
+            height={20}
+            className="mr-2"
+          />
+          Continue with Microsoft
+        </Button>
       </div>
     </div>
   );

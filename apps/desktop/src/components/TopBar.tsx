@@ -21,12 +21,12 @@ function TopBar({
   showSearchBar = false,
   showNewNoteButton = false,
 }: TopBarProps) {
-  const isMacOS = navigator.platform.toLowerCase().includes("mac");
+  const isMacOS = window.env?.platform === "darwin";
   const { isMaximized } = useWindowState();
 
   return (
     <div
-      className="h-12 w-full flex items-center justify-between px-4 text-white text-sm absolute top-0 left-0 z-40 bg-background"
+      className="h-12 w-full flex items-center justify-between px-4 text-sm absolute top-0 left-0 z-40"
       style={
         {
           WebkitAppRegion: "drag",
@@ -38,7 +38,7 @@ function TopBar({
       <div className="flex items-center gap-4">
         {showBackButton && (
           <button
-            className="p-1 hover:bg-gray-700 rounded"
+            className="p-1 text-foreground hover:bg-muted rounded transition-colors"
             onClick={onBack}
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
           >
@@ -48,7 +48,7 @@ function TopBar({
 
         {showSearchBar && (
           <button
-            className="flex items-center gap-2 bg-gray-800 px-3 py-1 rounded-md hover:bg-gray-700"
+            className="flex items-center gap-2 bg-muted text-foreground px-3 py-1 rounded-md hover:bg-muted/80 transition-colors"
             onClick={onSearch}
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
           >
@@ -61,7 +61,7 @@ function TopBar({
       <div className="flex items-center gap-2">
         {showNewNoteButton && (
           <button
-            className="px-3 py-1 bg-gray-800 hover:bg-gray-700 rounded-lg text-white flex items-center gap-2"
+            className="px-3 py-1 bg-muted text-foreground hover:bg-muted/80 rounded-lg flex items-center gap-2 transition-colors"
             onClick={onNewNote}
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
           >
