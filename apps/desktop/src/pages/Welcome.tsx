@@ -23,7 +23,7 @@ function Welcome() {
       className="flex flex-col items-center justify-center h-full p-8 overflow-hidden"
       style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
     >
-      <img src="/logo.png" alt="Sunless Logo" className="w-20 h-20 mb-8" />
+      <img src="./logo.png" alt="Sunless Logo" className="w-20 h-20 mb-8" />
 
       <h1 className="text-4xl font-semibold text-center mb-8 leading-tight h-24 flex items-center">
         <Typewriter
@@ -50,7 +50,7 @@ function Welcome() {
           onClick={handleGoogleAuth}
         >
           <img
-            src="/google.svg"
+            src="./google.svg"
             alt="Google"
             width={20}
             height={20}
@@ -65,7 +65,7 @@ function Welcome() {
           onClick={handleMicrosoftAuth}
         >
           <img
-            src="/microsoft.svg"
+            src="./microsoft.svg"
             alt="Microsoft"
             width={20}
             height={20}
