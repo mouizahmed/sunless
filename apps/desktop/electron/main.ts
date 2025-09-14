@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu } from "electron";
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeTheme } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -32,7 +32,30 @@ let isQuitting = false;
 const getAppName = () => app.getName() || "Sunless"; // fallback for dev mode
 const getAppVersion = () => `v${app.getVersion()}` || "v1.0.0"; // fallback for dev mode
 
+// Dynamic title bar colors based on system theme
+function getTitleBarColors() {
+  const isDarkMode = nativeTheme.shouldUseDarkColors;
+  return {
+    backgroundColor: "#ffffff00", // Always transparent
+    symbolColor: isDarkMode ? "#ffffff" : "#000000", // White in dark, black in light
+  };
+}
+
+// Update title bar colors for existing window
+function updateTitleBarColors() {
+  if (win && !win.isDestroyed()) {
+    const titleBarColors = getTitleBarColors();
+    win.setTitleBarOverlay({
+      color: titleBarColors.backgroundColor,
+      symbolColor: titleBarColors.symbolColor,
+      height: 48,
+    });
+  }
+}
+
 function createWindow() {
+  const titleBarColors = getTitleBarColors();
+
   win = new BrowserWindow({
     width: 1150,
     height: 750,
@@ -42,8 +65,8 @@ function createWindow() {
     title: "sunless",
     titleBarStyle: "hidden",
     titleBarOverlay: {
-      color: "#1f1f1f",
-      symbolColor: "#ffffff",
+      color: titleBarColors.backgroundColor,
+      symbolColor: titleBarColors.symbolColor,
       height: 48,
     },
     webPreferences: {
@@ -224,6 +247,9 @@ app.whenReady().then(() => {
   createWindow();
   createTray();
 
+  // Listen for system theme changes and update title bar
+  nativeTheme.on("updated", updateTitleBarColors);
+
   // Show window if launched with --show-window flag (from restart)
   if (process.argv.includes("--show-window")) {
     showWindow();
@@ -236,4 +262,7 @@ app.on("will-quit", () => {
   if (tray && !tray.isDestroyed()) {
     tray.destroy();
   }
+
+  // Cleanup theme listener
+  nativeTheme.removeListener("updated", updateTitleBarColors);
 });
