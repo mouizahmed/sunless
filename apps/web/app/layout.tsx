@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { ClerkProvider } from '@clerk/nextjs';
+import { ClerkProvider } from "@clerk/nextjs";
 import { ThemeProvider } from "next-themes";
-import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -39,7 +38,6 @@ export default function RootLayout({
             disableTransitionOnChange
           >
             {children}
-            <Toaster />
           </ThemeProvider>
         </ClerkProvider>
       </body>

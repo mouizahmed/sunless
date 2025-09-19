@@ -1,22 +1,17 @@
-import { Button } from "@/components/ui/button";
+import DownloadButton from "./download-button";
 
 export default function CTA() {
   return (
-    <section className="px-6 py-20 bg-gradient-to-br from-blue-50 via-blue-500 to-purple-600">
-      <div className="max-w-4xl mx-auto text-center">
-        <h2 className="text-3xl font-bold text-white mb-6">
-          Ready to transform your video content?
-        </h2>
-        <p className="text-xl text-blue-100 mb-8">
-          Join thousands of creators who trust WriteItOut for their transcription needs.
+    <section id="cta" className="relative py-24">
+      <div className="container mx-auto max-w-4xl px-6 text-center">
+        <h3 className="text-balance text-3xl font-semibold md:text-4xl text-zinc-900">
+          Ready to bring your meetings into the light?
+        </h3>
+        <p className="mx-auto mt-3 max-w-xl text-zinc-600">
+          Try Sunless for a few meetings today. It&apos;s free to get started.
         </p>
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Button size="lg" variant="secondary">
-            Start free trial
-          </Button>
-          <Button size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-blue-600">
-            Contact sales
-          </Button>
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
+          <DownloadButton variant="default" size="lg" />
         </div>
       </div>
     </section>

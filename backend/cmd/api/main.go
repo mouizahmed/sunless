@@ -10,6 +10,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"github.com/mouizahmed/justscribe-backend/internal/auth"
 	"github.com/mouizahmed/justscribe-backend/internal/cache"
 	"github.com/mouizahmed/justscribe-backend/internal/database"
 	"github.com/mouizahmed/justscribe-backend/internal/handlers"
@@ -17,6 +18,7 @@ import (
 	"github.com/mouizahmed/justscribe-backend/internal/middleware"
 	"github.com/mouizahmed/justscribe-backend/internal/repository"
 	"github.com/mouizahmed/justscribe-backend/internal/storage"
+	"github.com/redis/go-redis/v9"
 )
 
 func init() {
@@ -27,6 +29,11 @@ func main() {
 	err := godotenv.Load("cmd/api/.env")
 	if err != nil {
 		log.Fatal("Error loading cmd/api/.env file")
+	}
+
+	// Initialize Firebase Admin SDK
+	if err := auth.InitFirebase(); err != nil {
+		log.Fatalf("Failed to initialize Firebase: %v", err)
 	}
 
 	// Initialize database
@@ -63,11 +70,18 @@ func main() {
 		log.Fatalf("Failed to connect to Redis: %v", err)
 	}
 
+	// Initialize direct Redis client for OAuth codes
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     os.Getenv("REDIS_ADDR"),
+		Password: os.Getenv("REDIS_PASSWORD"),
+		DB:       0,
+	})
+
 	// Initialize Asynq client for job queuing
 	jobClient := jobs.NewClient(os.Getenv("REDIS_ADDR"), os.Getenv("REDIS_PASSWORD"))
 
 	// Initialize handlers
-	clerkWebhookHandler := handlers.NewClerkWebhookHandler(userRepo)
+	oauthHandler := handlers.NewOAuthHandler(userRepo, redisClient)
 	userHandler := handlers.NewUserHandler(userRepo)
 	folderHandler := handlers.NewFolderHandler(folderRepo)
 	tagHandler := handlers.NewTagHandler(tagRepo)
@@ -96,66 +110,74 @@ func main() {
 		api.GET("/health", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"status": "ok"})
 		})
+	}
 
-		// Webhook routes (no auth required)
-		api.POST("/webhooks/clerk", clerkWebhookHandler.HandleClerkWebhook)
+	// OAuth routes (no auth required)
+	auth := router.Group("/auth")
+	{
+		auth.GET("/start", oauthHandler.StartOAuth)
+		auth.GET("/callback/:provider", oauthHandler.HandleCallback) // Keep for legacy/direct backend flow
+		auth.POST("/complete", oauthHandler.CompleteAuth)            // Complete auth with one-time code
+	}
 
-		// Authenticated routes
-		authenticated := api.Group("/")
-		authenticated.Use(middleware.AuthMiddleware())
-		{
-			// User routes
-			authenticated.GET("/user/me", userHandler.GetCurrentUser)
+	// Authenticated API routes
+	authenticated := api.Group("/")
+	authenticated.Use(middleware.FirebaseAuthMiddleware())
+	{
+		// Auth routes (require Firebase auth)
+		authenticated.POST("/auth/logout", oauthHandler.Logout)
 
-			// Folder routes
-			authenticated.GET("/folders", folderHandler.GetFolderData)
-			authenticated.GET("/folders/:id", folderHandler.GetFolderData)
-			authenticated.GET("/folders/all", folderHandler.GetAllFolders)
-			authenticated.POST("/folders", folderHandler.CreateFolder)
-			authenticated.PATCH("/folders/:id", folderHandler.UpdateFolder)
-			authenticated.PATCH("/folders/:id/move", folderHandler.MoveFolder)
-			authenticated.DELETE("/folders/:id", folderHandler.DeleteFolder)
+		// User routes
+		authenticated.GET("/user/me", userHandler.GetCurrentUser)
 
-			// Tag routes
-			authenticated.GET("/items/:item_id/tags", tagHandler.GetItemTags)
-			authenticated.POST("/tags", tagHandler.CreateTag)
-			authenticated.PUT("/tags/:id", tagHandler.UpdateTag)
-			authenticated.DELETE("/tags/:id", tagHandler.DeleteTag)
-			authenticated.PUT("/items/:item_id/tags", tagHandler.UpdateItemTags)
+		// Folder routes
+		authenticated.GET("/folders", folderHandler.GetFolderData)
+		authenticated.GET("/folders/:id", folderHandler.GetFolderData)
+		authenticated.GET("/folders/all", folderHandler.GetAllFolders)
+		authenticated.POST("/folders", folderHandler.CreateFolder)
+		authenticated.PATCH("/folders/:id", folderHandler.UpdateFolder)
+		authenticated.PATCH("/folders/:id/move", folderHandler.MoveFolder)
+		authenticated.DELETE("/folders/:id", folderHandler.DeleteFolder)
 
-			// Upload routes
-			authenticated.POST("/upload/initiate", uploadHandler.InitiateUpload)
-			authenticated.POST("/upload/complete", uploadHandler.CompleteUpload)
-			authenticated.POST("/upload/:fileId/cancel", uploadHandler.CancelUpload)
-			authenticated.DELETE("/upload/:fileId", uploadHandler.DeleteUpload)
-			authenticated.GET("/upload/:fileId/status", uploadHandler.GetFileStatus)
+		// Tag routes
+		authenticated.GET("/items/:item_id/tags", tagHandler.GetItemTags)
+		authenticated.POST("/tags", tagHandler.CreateTag)
+		authenticated.PUT("/tags/:id", tagHandler.UpdateTag)
+		authenticated.DELETE("/tags/:id", tagHandler.DeleteTag)
+		authenticated.PUT("/items/:item_id/tags", tagHandler.UpdateItemTags)
 
-			// Glossary routes
-			authenticated.POST("/glossaries", glossaryHandler.CreateGlossary)
-			authenticated.GET("/glossaries", glossaryHandler.GetGlossaries)
-			authenticated.GET("/glossaries/:id/items", glossaryHandler.GetGlossaryItems)
-			authenticated.POST("/glossaries/:id/items", glossaryHandler.CreateGlossaryItem)
-			authenticated.PATCH("/glossaries-items/:itemId", glossaryHandler.UpdateGlossaryItem)
-			authenticated.DELETE("/glossaries-items/:itemId", glossaryHandler.DeleteGlossaryItem)
-			authenticated.PATCH("/glossaries/:id", glossaryHandler.UpdateGlossary)
-			authenticated.DELETE("/glossaries/:id", glossaryHandler.DeleteGlossary)
+		// Upload routes
+		authenticated.POST("/upload/initiate", uploadHandler.InitiateUpload)
+		authenticated.POST("/upload/complete", uploadHandler.CompleteUpload)
+		authenticated.POST("/upload/:fileId/cancel", uploadHandler.CancelUpload)
+		authenticated.DELETE("/upload/:fileId", uploadHandler.DeleteUpload)
+		authenticated.GET("/upload/:fileId/status", uploadHandler.GetFileStatus)
 
-			// Transcription routes
-			authenticated.POST("/transcriptions/batch", transcriptionHandler.BatchCreateTranscriptions)
-			authenticated.GET("/transcriptions", transcriptionHandler.GetTranscriptions)
-			authenticated.GET("/transcriptions/:id", transcriptionHandler.GetTranscription)
-			authenticated.DELETE("/transcriptions/:id", transcriptionHandler.DeleteTranscription)
+		// Glossary routes
+		authenticated.POST("/glossaries", glossaryHandler.CreateGlossary)
+		authenticated.GET("/glossaries", glossaryHandler.GetGlossaries)
+		authenticated.GET("/glossaries/:id/items", glossaryHandler.GetGlossaryItems)
+		authenticated.POST("/glossaries/:id/items", glossaryHandler.CreateGlossaryItem)
+		authenticated.PATCH("/glossaries-items/:itemId", glossaryHandler.UpdateGlossaryItem)
+		authenticated.DELETE("/glossaries-items/:itemId", glossaryHandler.DeleteGlossaryItem)
+		authenticated.PATCH("/glossaries/:id", glossaryHandler.UpdateGlossary)
+		authenticated.DELETE("/glossaries/:id", glossaryHandler.DeleteGlossary)
 
-			// // URL extraction routes
-			// authenticated.POST("/url/extract", urlExtractionHandler.SubmitURL)
-			// authenticated.GET("/url/jobs", urlExtractionHandler.GetUserJobs)
-			// authenticated.GET("/url/jobs/:jobId", urlExtractionHandler.GetJobStatus)
-			// authenticated.POST("/url/jobs/:jobId/cancel", urlExtractionHandler.CancelJob)
+		// Transcription routes
+		authenticated.POST("/transcriptions/batch", transcriptionHandler.BatchCreateTranscriptions)
+		authenticated.GET("/transcriptions", transcriptionHandler.GetTranscriptions)
+		authenticated.GET("/transcriptions/:id", transcriptionHandler.GetTranscription)
+		authenticated.DELETE("/transcriptions/:id", transcriptionHandler.DeleteTranscription)
 
-			// // SSE routes
-			// authenticated.GET("/events/stream", sseHandler.StreamEvents)
-			// authenticated.GET("/events/connections", sseHandler.GetActiveConnections)
-		}
+		// // URL extraction routes
+		// authenticated.POST("/url/extract", urlExtractionHandler.SubmitURL)
+		// authenticated.GET("/url/jobs", urlExtractionHandler.GetUserJobs)
+		// authenticated.GET("/url/jobs/:jobId", urlExtractionHandler.GetJobStatus)
+		// authenticated.POST("/url/jobs/:jobId/cancel", urlExtractionHandler.CancelJob)
+
+		// // SSE routes
+		// authenticated.GET("/events/stream", sseHandler.StreamEvents)
+		// authenticated.GET("/events/connections", sseHandler.GetActiveConnections)
 	}
 
 	// Start the server

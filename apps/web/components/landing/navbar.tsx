@@ -1,82 +1,64 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import Link from "next/link";
-import { useAuth } from "@clerk/nextjs";
+import { useState, useEffect } from "react";
+import DownloadButton from "./download-button";
 
 export default function Navbar() {
-  const { isSignedIn, isLoaded } = useAuth();
+  const [isScrolled, setIsScrolled] = useState(false);
 
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 0);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 p-4">
-      <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20 shadow-xl mx-auto max-w-7xl">
-        <div className="px-6 py-3">
-          <div className="flex items-center justify-between">
+      <div className="bg-white/70 backdrop-blur-sm rounded-full border border-gray-200 shadow-lg mx-auto w-fit">
+        <div className="px-6 py-2">
+          <div className="flex items-center gap-8">
             {/* Logo */}
-            <Link href="/" className="flex items-center space-x-3">
-              <Image 
-                src="/logo2.svg" 
-                alt="WriteItOut Logo" 
-                width={50} 
-                height={50}
-                className="w-12 h-12 border border-gray-200 rounded-xl"
+            <Link href="/" className="flex items-center">
+              <Image
+                src="/logo2.png"
+                alt="Sunless Logo"
+                width={32}
+                height={32}
+                className="w-8 h-8"
               />
-              {/* <span className="text-2xl font-bold text-gray-900 tracking-tight font-serif hidden md:flex">WriteItOut</span> */}
             </Link>
 
-            {/* Desktop Navigation - Hidden on mobile */}
-            <div className="hidden lg:flex items-center space-x-8">
-              {/* Features */}
-              <a href="#features" className="text-gray-700 hover:text-gray-900 font-medium transition-colors">
-                Features
-              </a>
+            {/* Navigation Links */}
+            <a
+              href="#pricing"
+              className="text-gray-600 hover:text-gray-900 font-medium transition-colors text-sm"
+            >
+              Pricing
+            </a>
 
-              {/* Use cases */}
-              <a href="#use-cases" className="text-gray-700 hover:text-gray-900 font-medium transition-colors">
-                Use cases
-              </a>
+            <a
+              href="/changelog"
+              className="text-gray-600 hover:text-gray-900 font-medium transition-colors text-sm"
+            >
+              Changelog
+            </a>
 
-              {/* FAQ */}
-              <a href="#faq" className="text-gray-700 hover:text-gray-900 font-medium transition-colors">
-                FAQ
-              </a>
+            <a
+              href="/support"
+              className="text-gray-600 hover:text-gray-900 font-medium transition-colors text-sm"
+            >
+              Support
+            </a>
 
-              {/* Pricing */}
-              <a href="#pricing" className="text-gray-700 hover:text-gray-900 font-medium transition-colors">
-                Pricing
-              </a>
-            </div>
-
-            {/* Mobile & Desktop Right side */}
-            <div className="flex items-center space-x-2 sm:space-x-3">
-              {isLoaded && isSignedIn ? (
-                /* Show dashboard button for logged-in users */
-                <Link href="/dashboard">
-                  <Button 
-                    className="bg-black hover:bg-gray-800 text-white font-semibold px-3 sm:px-6 py-2 rounded-lg transition-colors text-sm"
-                  >
-                    Dashboard
-                  </Button>
-                </Link>
-              ) : (
-                <>
-                  {/* Log in - Show only when not signed in */}
-                  <Link href="/login" className="text-gray-700 hover:text-gray-900 font-medium transition-colors text-sm">
-                    Log in
-                  </Link>
-
-                  {/* Try for free button - Show only when not signed in */}
-                  <Link href="/signup">
-                    <Button 
-                      className="bg-black hover:bg-gray-800 text-white font-semibold px-3 sm:px-6 py-2 rounded-lg transition-colors text-sm"
-                    >
-                      Try for free
-                    </Button>
-                  </Link>
-                </>
-              )}
-            </div>
+            {/* Download Button */}
+            <DownloadButton
+              variant={isScrolled ? "default" : "outline"}
+              size="sm"
+            />
           </div>
         </div>
       </div>

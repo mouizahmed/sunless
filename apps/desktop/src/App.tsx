@@ -1,5 +1,6 @@
 import { HashRouter as Router, Routes, Route } from "react-router-dom";
 import Welcome from "./pages/Welcome";
+import Dashboard from "./pages/Dashboard";
 import TopBar from "./components/TopBar";
 import { useNavigationHistory } from "./hooks/useNavigationHistory";
 import { TopBarProvider, useTopBar } from "./contexts/TopBarContext";
@@ -30,6 +31,7 @@ function AppLayout() {
       <div className="flex-1 overflow-hidden pt-12">
         <Routes>
           <Route path="/" element={<Welcome />} />
+          <Route path="/dashboard" element={<Dashboard />} />
         </Routes>
       </div>
     </div>
