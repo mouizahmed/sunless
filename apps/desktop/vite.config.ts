@@ -7,6 +7,17 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   // Use relative base path for Electron apps
   base: "./",
+  define: {
+    // Embed Firebase config at build time
+    __FIREBASE_CONFIG__: JSON.stringify({
+      apiKey: process.env.VITE_FIREBASE_API_KEY || "AIzaSyCXpAhp5TRtthtYgmjRBAKvapzXJi_udjg",
+      authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || "sunless-1e6a1.firebaseapp.com",
+      projectId: process.env.VITE_FIREBASE_PROJECT_ID || "sunless-1e6a1",
+      storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || "sunless-1e6a1.firebasestorage.app",
+      messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "861156340434",
+      appId: process.env.VITE_FIREBASE_APP_ID || "1:861156340434:web:a62b156a38d70b60c9f30b"
+    })
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

@@ -11,15 +11,23 @@ import {
   onAuthStateChanged,
 } from "firebase/auth";
 
-// Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyCXpAhp5TRtthtYgmjRBAKvapzXJi_udjg",
-  authDomain: "sunless-1e6a1.firebaseapp.com",
-  projectId: "sunless-1e6a1",
-  storageBucket: "sunless-1e6a1.firebasestorage.app",
-  messagingSenderId: "861156340434",
-  appId: "1:861156340434:web:a62b156a38d70b60c9f30b",
-};
+// Define Firebase config type
+interface FirebaseConfig {
+  apiKey: string;
+  authDomain: string;
+  projectId: string;
+  storageBucket: string;
+  messagingSenderId: string;
+  appId: string;
+}
+
+// Declare global for build-time Firebase config
+declare global {
+  const __FIREBASE_CONFIG__: FirebaseConfig;
+}
+
+// Firebase configuration from build-time constants
+const firebaseConfig: FirebaseConfig = __FIREBASE_CONFIG__;
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
