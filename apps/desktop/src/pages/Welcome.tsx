@@ -36,8 +36,8 @@ function Welcome() {
           if (firebaseUser) {
             console.log(`✅ Firebase user: ${firebaseUser.displayName} (${firebaseUser.email})`);
             await window.electronAPI.setAuthState(true);
-            // Redirect to dashboard for authenticated users
-            navigate('/dashboard');
+            // Redirect to dashboard for authenticated users (replace history)
+            navigate('/dashboard', { replace: true });
           } else {
             console.log("🔓 No Firebase user found");
             await window.electronAPI.logout();

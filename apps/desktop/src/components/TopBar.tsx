@@ -31,7 +31,7 @@ function TopBar({
         {
           WebkitAppRegion: "drag",
           paddingLeft: isMacOS && !isMaximized ? "80px" : "16px",
-          paddingRight: !isMacOS && !isMaximized ? "140px" : "16px",
+          paddingRight: !isMacOS ? "140px" : "16px",
         } as React.CSSProperties
       }
     >

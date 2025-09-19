@@ -22,7 +22,7 @@ function getBackendUrl(): string {
 
   // Default URLs based on environment
   const defaultUrls = {
-    development: "http://localhost:8080/api",
+    development: "http://localhost:8080",
     production: "https://api.sunless.app",
   };
 

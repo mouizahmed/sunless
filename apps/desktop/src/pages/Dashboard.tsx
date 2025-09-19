@@ -36,8 +36,8 @@ function Dashboard() {
           picture: firebaseUser.photoURL || undefined,
         });
       } else {
-        // Redirect unauthenticated users to welcome page
-        navigate('/');
+        // Redirect unauthenticated users to welcome page (replace history)
+        navigate('/', { replace: true });
       }
       setLoading(false);
     });

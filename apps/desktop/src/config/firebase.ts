@@ -11,16 +11,14 @@ import {
   onAuthStateChanged,
 } from "firebase/auth";
 
-// Firebase configuration from environment variables
-const env = import.meta.env;
-
+// Firebase configuration
 const firebaseConfig = {
-  apiKey: env.VITE_FIREBASE_API_KEY,
-  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: env.VITE_FIREBASE_APP_ID,
+  apiKey: "AIzaSyCXpAhp5TRtthtYgmjRBAKvapzXJi_udjg",
+  authDomain: "sunless-1e6a1.firebaseapp.com",
+  projectId: "sunless-1e6a1",
+  storageBucket: "sunless-1e6a1.firebasestorage.app",
+  messagingSenderId: "861156340434",
+  appId: "1:861156340434:web:a62b156a38d70b60c9f30b",
 };
 
 // Initialize Firebase
