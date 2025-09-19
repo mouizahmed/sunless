@@ -23,7 +23,7 @@ function Dashboard() {
     // Set up TopBar for dashboard
     setConfig({
       showSearchBar: true,
-      showNewNoteButton: true,
+      showActionButtons: true,
     });
 
     // Listen for auth state changes

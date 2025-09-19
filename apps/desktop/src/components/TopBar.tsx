@@ -1,14 +1,16 @@
 import React from "react";
-import { ArrowLeft, Search, Plus } from "lucide-react";
+import { ArrowLeft, Search, Upload, Video } from "lucide-react";
 import { useWindowState } from "@/hooks/useWindowState";
+import { Button } from "@/components/ui/button";
 
 interface TopBarProps {
   onBack?: () => void;
   onSearch?: () => void;
-  onNewNote?: () => void;
+  onUploadFile?: () => void;
+  onNewMeeting?: () => void;
   showBackButton?: boolean;
   showSearchBar?: boolean;
-  showNewNoteButton?: boolean;
+  showActionButtons?: boolean;
   invisible?: boolean;
   showBackOnInvisible?: boolean;
 }
@@ -16,10 +18,11 @@ interface TopBarProps {
 function TopBar({
   onBack,
   onSearch,
-  onNewNote,
+  onUploadFile,
+  onNewMeeting,
   showBackButton = false,
   showSearchBar = false,
-  showNewNoteButton = false,
+  showActionButtons = false,
 }: TopBarProps) {
   const isMacOS = window.env?.platform === "darwin";
   const { isMaximized } = useWindowState();
@@ -37,37 +40,51 @@ function TopBar({
     >
       <div className="flex items-center gap-4">
         {showBackButton && (
-          <button
-            className="p-1 text-foreground hover:bg-muted rounded transition-colors"
+          <Button
+            variant="ghost"
+            size="sm"
+            className="p-1 h-auto"
             onClick={onBack}
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
           >
             <ArrowLeft size={16} />
-          </button>
+          </Button>
         )}
 
         {showSearchBar && (
-          <button
-            className="flex items-center gap-2 bg-muted text-foreground px-3 py-1 rounded-md hover:bg-muted/80 transition-colors"
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2 px-3 py-1"
             onClick={onSearch}
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
           >
             <Search size={14} />
             <span>Search</span>
-          </button>
+          </Button>
         )}
       </div>
 
       <div className="flex items-center gap-2">
-        {showNewNoteButton && (
-          <button
-            className="px-3 py-1 bg-muted text-foreground hover:bg-muted/80 rounded-lg flex items-center gap-2 transition-colors"
-            onClick={onNewNote}
-            style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
-          >
-            <Plus size={14} />
-            New Note
-          </button>
+        {showActionButtons && (
+          <>
+            <Button
+              className="px-3 py-1 bg-black text-foreground hover:bg-muted/80 rounded-lg flex items-center gap-2 transition-colors"
+              onClick={onUploadFile}
+              style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+            >
+              <Upload size={14} />
+              Upload File
+            </Button>
+            <Button
+              className="px-3 py-1 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg flex items-center gap-2 transition-colors"
+              onClick={onNewMeeting}
+              style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+            >
+              <Video size={14} />
+              New Meeting
+            </Button>
+          </>
         )}
       </div>
     </div>

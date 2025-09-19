@@ -2,7 +2,7 @@ import { createContext, useContext, useState, ReactNode } from "react";
 
 interface TopBarConfig {
   showSearchBar?: boolean;
-  showNewNoteButton?: boolean;
+  showActionButtons?: boolean;
 }
 
 interface TopBarContextType {

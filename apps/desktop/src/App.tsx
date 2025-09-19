@@ -13,8 +13,12 @@ function AppLayout() {
     console.log("Search clicked");
   };
 
-  const handleNewNote = () => {
-    console.log("New Note clicked");
+  const handleUploadFile = () => {
+    console.log("Upload File clicked");
+  };
+
+  const handleNewMeeting = () => {
+    console.log("New Meeting clicked");
   };
 
   return (
@@ -22,10 +26,11 @@ function AppLayout() {
       <TopBar
         onBack={handleBack}
         onSearch={handleSearch}
-        onNewNote={handleNewNote}
+        onUploadFile={handleUploadFile}
+        onNewMeeting={handleNewMeeting}
         showBackButton={canGoBack}
         showSearchBar={config.showSearchBar}
-        showNewNoteButton={config.showNewNoteButton}
+        showActionButtons={config.showActionButtons}
       />
 
       <div className="flex-1 overflow-hidden pt-12">
