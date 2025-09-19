@@ -37,7 +37,7 @@ function Dashboard() {
         });
       } else {
         // Redirect unauthenticated users to welcome page (replace history)
-        navigate('/', { replace: true });
+        navigate("/", { replace: true });
       }
       setLoading(false);
     });
@@ -56,7 +56,9 @@ function Dashboard() {
 
   const handleLogoutEverywhere = async () => {
     try {
-      const baseUrl = (window as unknown as { BACKEND_URL?: string }).BACKEND_URL || "http://localhost:8080";
+      const baseUrl =
+        (window as unknown as { BACKEND_URL?: string }).BACKEND_URL ||
+        "http://localhost:8080";
       await callBackendLogout(baseUrl);
       await auth.signOut();
       await window.electronAPI.logout();
@@ -89,11 +91,11 @@ function Dashboard() {
 
   return (
     <div
-      className="flex flex-col h-full p-8"
+      className="flex flex-col h-full"
       style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
     >
       {/* Profile Section */}
-      <div className="flex items-center gap-4 mb-8 p-6 bg-gray-50 dark:bg-gray-800 rounded-lg">
+      <div className="flex items-center gap-4 mb-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
         {user.picture && (
           <img
             src={user.picture}
@@ -123,7 +125,8 @@ function Dashboard() {
         <div className="text-center max-w-md">
           <h1 className="text-3xl font-semibold mb-4">Welcome to Sunless</h1>
           <p className="text-gray-600 dark:text-gray-400 mb-8">
-            Your voice echoes into light. Start by creating your first note or exploring the features.
+            Your voice echoes into light. Start by creating your first note or
+            exploring the features.
           </p>
 
           <div

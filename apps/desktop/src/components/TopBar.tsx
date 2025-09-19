@@ -29,16 +29,20 @@ function TopBar({
 
   return (
     <div
-      className="h-12 w-full flex items-center justify-between px-4 text-sm absolute top-0 left-0 z-40"
+      className="w-full flex items-center justify-between text-sm py-1 px-2"
       style={
         {
           WebkitAppRegion: "drag",
-          paddingLeft: isMacOS && !isMaximized ? "80px" : "16px",
-          paddingRight: !isMacOS ? "140px" : "16px",
+          paddingLeft: isMacOS && !isMaximized ? "80px" : undefined,
+          paddingRight: !isMacOS ? "140px" : undefined,
         } as React.CSSProperties
       }
     >
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
+          <img src="./logo.png" alt="Sunless Logo" className="w-6 h-6" />
+        </div>
+
         {showBackButton && (
           <Button
             variant="ghost"
@@ -47,42 +51,43 @@ function TopBar({
             onClick={onBack}
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
           >
-            <ArrowLeft size={16} />
+            <ArrowLeft size={14} />
           </Button>
         )}
 
         {showSearchBar && (
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="flex items-center gap-2 px-3 py-1"
+            className="flex items-center gap-2 px-2 text-xs"
             onClick={onSearch}
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
           >
-            <Search size={14} />
+            <Search size={12} />
             <span>Search</span>
           </Button>
         )}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
         {showActionButtons && (
           <>
             <Button
-              className="px-3 py-1 bg-black text-foreground hover:bg-muted/80 rounded-lg flex items-center gap-2 transition-colors"
+              size="sm"
+              variant="ghost"
+              className="px-2 py-1 text-xs"
               onClick={onUploadFile}
               style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
             >
-              <Upload size={14} />
-              Upload File
+              <Upload size={12} />
             </Button>
             <Button
-              className="px-3 py-1 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg flex items-center gap-2 transition-colors"
+              size="sm"
+              className="px-2 py-1 bg-primary text-primary-foreground hover:bg-primary/90 text-xs"
               onClick={onNewMeeting}
               style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
             >
-              <Video size={14} />
-              New Meeting
+              <Video size={12} />
             </Button>
           </>
         )}

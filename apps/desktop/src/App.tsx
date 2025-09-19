@@ -22,18 +22,20 @@ function AppLayout() {
   };
 
   return (
-    <div className="h-screen flex flex-col">
-      <TopBar
-        onBack={handleBack}
-        onSearch={handleSearch}
-        onUploadFile={handleUploadFile}
-        onNewMeeting={handleNewMeeting}
-        showBackButton={canGoBack}
-        showSearchBar={config.showSearchBar}
-        showActionButtons={config.showActionButtons}
-      />
+    <div className={`h-screen ${config.visible !== false ? 'grid grid-rows-[auto_1fr]' : 'flex flex-col'}`}>
+      {config.visible !== false && (
+        <TopBar
+          onBack={handleBack}
+          onSearch={handleSearch}
+          onUploadFile={handleUploadFile}
+          onNewMeeting={handleNewMeeting}
+          showBackButton={canGoBack}
+          showSearchBar={config.showSearchBar}
+          showActionButtons={config.showActionButtons}
+        />
+      )}
 
-      <div className="flex-1 overflow-hidden pt-12">
+      <div className="overflow-hidden flex-1">
         <Routes>
           <Route path="/" element={<Welcome />} />
           <Route path="/dashboard" element={<Dashboard />} />

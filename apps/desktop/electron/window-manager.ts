@@ -1,17 +1,18 @@
-import {
-  BrowserWindow,
-  ipcMain,
-  nativeTheme,
-  app,
-} from "electron";
+import { BrowserWindow, ipcMain, nativeTheme, app } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
-export const MAIN_DIST = path.join(process.env.APP_ROOT || path.join(__dirname, ".."), "dist-electron");
-export const RENDERER_DIST = path.join(process.env.APP_ROOT || path.join(__dirname, ".."), "dist");
+export const MAIN_DIST = path.join(
+  process.env.APP_ROOT || path.join(__dirname, ".."),
+  "dist-electron",
+);
+export const RENDERER_DIST = path.join(
+  process.env.APP_ROOT || path.join(__dirname, ".."),
+  "dist",
+);
 
 let win: BrowserWindow | null;
 let isQuitting = false;
@@ -43,13 +44,17 @@ export function createWindow() {
     height: 750,
     minWidth: 800,
     minHeight: 600,
-    icon: path.join(process.env.APP_ROOT || path.join(__dirname, ".."), "build", "icon.png"),
+    icon: path.join(
+      process.env.APP_ROOT || path.join(__dirname, ".."),
+      "build",
+      "icon.png",
+    ),
     title: "sunless",
     titleBarStyle: "hidden",
     titleBarOverlay: {
       color: titleBarColors.backgroundColor,
       symbolColor: titleBarColors.symbolColor,
-      height: 48,
+      height: 44,
     },
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),

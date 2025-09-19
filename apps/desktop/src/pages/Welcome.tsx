@@ -3,7 +3,11 @@ import { Button } from "@/components/ui/button";
 import { useTopBar } from "@/contexts/TopBarContext";
 import { useNavigate } from "react-router-dom";
 import Typewriter from "typewriter-effect";
-import { auth, signInWithCustomToken, onAuthStateChanged } from "@/config/firebase";
+import {
+  auth,
+  signInWithCustomToken,
+  onAuthStateChanged,
+} from "@/config/firebase";
 import Loading from "@/components/Loading";
 
 interface AuthState {
@@ -30,28 +34,35 @@ function Welcome() {
         console.log("🔍 Initializing authentication...");
 
         // Set up Firebase auth state listener - handles persistence
-        authStateListenerUnsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-          console.log("🔔 Firebase auth state changed:", firebaseUser ? "logged in" : "logged out");
+        authStateListenerUnsubscribe = onAuthStateChanged(
+          auth,
+          async (firebaseUser) => {
+            console.log(
+              "🔔 Firebase auth state changed:",
+              firebaseUser ? "logged in" : "logged out",
+            );
 
-          if (firebaseUser) {
-            console.log(`✅ Firebase user: ${firebaseUser.displayName} (${firebaseUser.email})`);
-            await window.electronAPI.setAuthState(true);
-            // Redirect to dashboard for authenticated users (replace history)
-            navigate('/dashboard', { replace: true });
-          } else {
-            console.log("🔓 No Firebase user found");
-            await window.electronAPI.logout();
+            if (firebaseUser) {
+              console.log(
+                `✅ Firebase user: ${firebaseUser.displayName} (${firebaseUser.email})`,
+              );
+              await window.electronAPI.setAuthState(true);
+              // Redirect to dashboard for authenticated users (replace history)
+              navigate("/dashboard", { replace: true });
+            } else {
+              console.log("🔓 No Firebase user found");
+              await window.electronAPI.logout();
 
-            setAuthState(prev => ({
-              ...prev,
-              error: null,
-            }));
-          }
-        });
-
+              setAuthState((prev) => ({
+                ...prev,
+                error: null,
+              }));
+            }
+          },
+        );
       } catch (error) {
         console.error("❌ Error initializing auth:", error);
-        setAuthState(prev => ({
+        setAuthState((prev) => ({
           ...prev,
           loading: false,
           error: "Failed to initialize authentication",
@@ -78,7 +89,7 @@ function Welcome() {
             })
             .catch((firebaseError) => {
               console.error("❌ Firebase sign-in failed:", firebaseError);
-              setAuthState(prev => ({
+              setAuthState((prev) => ({
                 ...prev,
                 loading: false,
                 error: "Firebase authentication failed",
@@ -86,7 +97,7 @@ function Welcome() {
             });
         } else if (!data.success && data.error) {
           console.error("❌ Auth session update failed:", data.error);
-          setAuthState(prev => ({
+          setAuthState((prev) => ({
             ...prev,
             loading: false,
             error: data.error || "Authentication failed",
@@ -95,8 +106,8 @@ function Welcome() {
       },
     );
 
-    // Welcome page has no additional TopBar features
-    setConfig({});
+    // Welcome page hides the TopBar entirely
+    setConfig({ visible: false });
 
     // Initialize authentication
     initializeAuth();
@@ -110,9 +121,8 @@ function Welcome() {
     };
   }, [setConfig, navigate]);
 
-
   const handleGoogleAuth = async () => {
-    setAuthState(prev => ({
+    setAuthState((prev) => ({
       ...prev,
       loading: true,
       provider: "google",
@@ -150,8 +160,11 @@ function Welcome() {
       }
     } catch (error: unknown) {
       console.error("Google authentication error:", error);
-      const errorMessage = error instanceof Error ? error.message : "Authentication failed. Please try again.";
-      setAuthState(prev => ({
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Authentication failed. Please try again.";
+      setAuthState((prev) => ({
         ...prev,
         loading: false,
         provider: null,
@@ -161,7 +174,7 @@ function Welcome() {
   };
 
   const handleMicrosoftAuth = async () => {
-    setAuthState(prev => ({
+    setAuthState((prev) => ({
       ...prev,
       loading: true,
       provider: "microsoft",
@@ -199,8 +212,11 @@ function Welcome() {
       }
     } catch (error: unknown) {
       console.error("Microsoft authentication error:", error);
-      const errorMessage = error instanceof Error ? error.message : "Authentication failed. Please try again.";
-      setAuthState(prev => ({
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Authentication failed. Please try again.";
+      setAuthState((prev) => ({
         ...prev,
         loading: false,
         provider: null,
@@ -212,7 +228,7 @@ function Welcome() {
   // Show login interface
   return (
     <div
-      className="flex flex-col items-center justify-center h-full p-8 overflow-hidden"
+      className="flex flex-col items-center justify-center h-full overflow-hidden"
       style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
     >
       <img src="./logo.png" alt="Sunless Logo" className="w-20 h-20 mb-8" />
