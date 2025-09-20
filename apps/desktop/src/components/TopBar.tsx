@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowLeft, Search, Upload, Video } from "lucide-react";
+import { ArrowLeft, Search, Upload } from "lucide-react";
 import { useWindowState } from "@/hooks/useWindowState";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -49,7 +49,7 @@ function TopBar({
           <Button
             variant="ghost"
             size="sm"
-            className="p-1 h-auto"
+            className="p-1 h-auto hover:bg-neutral-100 dark:hover:bg-neutral-800"
             onClick={onBack}
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
           >
@@ -61,7 +61,7 @@ function TopBar({
           <Button
             variant="ghost"
             size="sm"
-            className="flex items-center gap-2 px-2 text-xs"
+            className="flex items-center gap-2 px-2 text-xs hover:bg-neutral-100 dark:hover:bg-neutral-800"
             onClick={onSearch}
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
           >
@@ -77,19 +77,19 @@ function TopBar({
             <Button
               size="sm"
               variant="ghost"
-              className="px-2 py-1 text-xs"
+              className="px-2 py-1 text-xs hover:bg-neutral-100 dark:hover:bg-neutral-800"
               onClick={onUploadFile}
               style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
             >
               <Upload size={12} />
             </Button>
             <Button
-              size="sm"
-              className="px-2 py-1 bg-primary text-primary-foreground hover:bg-primary/90 text-xs"
+              variant="default"
+              className="px-2 py-1 h-auto rounded-md bg-violet-500 text-primary-foreground hover:bg-violet-600 text-xs"
               onClick={onNewMeeting}
               style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
             >
-              <Video size={12} />
+              Start a Session
             </Button>
           </>
         )}

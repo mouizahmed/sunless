@@ -95,25 +95,62 @@ export function AppSidebar() {
                   )}
                   <div className="flex-1 min-w-0 text-left">
                     <p className="text-xs font-medium truncate">{user.name}</p>
-                    <p className="text-xs text-gray-500 truncate">
+                    <p className="text-xs text-neutral-500 truncate">
                       {user.email}
                     </p>
                   </div>
                 </div>
-                <ChevronsUpDown size={12} className="text-gray-400" />
+                <ChevronsUpDown size={12} className="text-neutral-400" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuContent
+              align="start"
+              className="w-60 bg-neutral-800 border-neutral-700 text-white"
+            >
+              <div className="px-3 py-2 border-b border-neutral-700">
+                <p className="text-sm font-medium text-white">{user.name}</p>
+                <p className="text-xs text-neutral-400">{user.email}</p>
+              </div>
+              <DropdownMenuItem
+                className="flex items-center gap-3 px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 hover:text-white cursor-pointer"
+                style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+              >
+                <FileText size={14} />
+                <span>Manage templates</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="flex items-center gap-3 px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 hover:text-white cursor-pointer"
+                style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+              >
+                <Plus size={14} />
+                <span>Copy invite link</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="flex items-center gap-3 px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 hover:text-white cursor-pointer"
+                style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+              >
+                <Settings size={14} />
+                <span>Help Center</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="flex items-center gap-3 px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 hover:text-white cursor-pointer"
+                style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+              >
+                <Settings size={14} />
+                <span>Settings</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="border-neutral-700" />
               <DropdownMenuItem
                 onClick={logout}
+                className="flex items-center gap-3 px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 hover:text-white cursor-pointer"
                 style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
               >
                 <LogOut size={14} />
                 <span>Log out</span>
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={logoutEverywhere}
+                className="flex items-center gap-3 px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 hover:text-white cursor-pointer"
                 style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
               >
                 <LogOut size={14} />

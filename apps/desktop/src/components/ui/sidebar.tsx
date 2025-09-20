@@ -27,7 +27,10 @@ interface SidebarProviderProps {
   defaultOpen?: boolean;
 }
 
-export function SidebarProvider({ children, defaultOpen = true }: SidebarProviderProps) {
+export function SidebarProvider({
+  children,
+  defaultOpen = true,
+}: SidebarProviderProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   const toggle = () => {
@@ -57,12 +60,10 @@ export function Sidebar({ children, className }: SidebarProps) {
       className={cn(
         "transition-all duration-200 ease-in-out",
         isOpen ? "w-56" : "w-0",
-        className
+        className,
       )}
     >
-      <div className="h-full flex flex-col">
-        {children}
-      </div>
+      <div className="h-full flex flex-col">{children}</div>
     </div>
   );
 }
@@ -85,7 +86,10 @@ export function SidebarTrigger({ className }: { className?: string }) {
         console.log("Sidebar toggle clicked");
         toggle();
       }}
-      className={cn("p-1 h-auto", className)}
+      className={cn(
+        "flex items-center gap-2 px-2 text-xs hover:bg-neutral-100 dark:hover:bg-neutral-800",
+        className,
+      )}
       style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
     >
       <PanelLeft size={14} />
@@ -93,15 +97,32 @@ export function SidebarTrigger({ className }: { className?: string }) {
   );
 }
 
-export function SidebarHeader({ children, className }: { children: React.ReactNode; className?: string }) {
+export function SidebarHeader({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <div className={cn("p-3 border-b border-neutral-200 dark:border-neutral-800", className)}>
+    <div
+      className={cn(
+        "p-3 border-b border-neutral-200 dark:border-neutral-800",
+        className,
+      )}
+    >
       {children}
     </div>
   );
 }
 
-export function SidebarContent({ children, className }: { children: React.ReactNode; className?: string }) {
+export function SidebarContent({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
     <div className={cn("flex-1 overflow-y-auto overflow-x-hidden", className)}>
       {children}
@@ -109,9 +130,20 @@ export function SidebarContent({ children, className }: { children: React.ReactN
   );
 }
 
-export function SidebarFooter({ children, className }: { children: React.ReactNode; className?: string }) {
+export function SidebarFooter({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <div className={cn("border-t border-neutral-200 dark:border-neutral-800", className)}>
+    <div
+      className={cn(
+        "border-t border-neutral-200 dark:border-neutral-800",
+        className,
+      )}
+    >
       {children}
     </div>
   );

@@ -2,13 +2,11 @@ import React, { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useTopBar } from "@/contexts/TopBarContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
 import { getFirebaseIdToken } from "@/utils/firebase-api";
 
 function Dashboard() {
   const { setConfig } = useTopBar();
-  const { user, isAuthenticated } = useAuth();
-  const navigate = useNavigate();
+  const { user } = useAuth();
 
   useEffect(() => {
     // Set up TopBar for dashboard
@@ -16,12 +14,7 @@ function Dashboard() {
       showSearchBar: true,
       showActionButtons: true,
     });
-
-    // Redirect unauthenticated users to welcome page
-    if (!isAuthenticated) {
-      navigate("/", { replace: true });
-    }
-  }, [setConfig, navigate, isAuthenticated]);
+  }, [setConfig]);
 
   if (!user) {
     return (

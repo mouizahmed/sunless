@@ -54,7 +54,7 @@ function AppLayout() {
 
       <div className="overflow-hidden flex-1">
         <Routes>
-          <Route path="/" element={<Welcome />} />
+          <Route path="/welcome" element={<Welcome />} />
           <Route
             path="/dashboard"
             element={
@@ -63,6 +63,7 @@ function AppLayout() {
               </DashboardLayout>
             }
           />
+          <Route path="/" element={<div />} />
         </Routes>
       </div>
     </div>
