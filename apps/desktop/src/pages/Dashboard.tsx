@@ -1,17 +1,14 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useTopBar } from "@/contexts/TopBarContext";
-import { useUser } from "@/contexts/UserContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { auth, onAuthStateChanged } from "@/config/firebase";
 import { getFirebaseIdToken } from "@/utils/firebase-api";
-import Loading from "@/components/Loading";
 
 function Dashboard() {
   const { setConfig } = useTopBar();
-  const { user, setUser } = useUser();
+  const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     // Set up TopBar for dashboard
@@ -20,35 +17,11 @@ function Dashboard() {
       showActionButtons: true,
     });
 
-    // Listen for auth state changes
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        setUser({
-          id: firebaseUser.uid,
-          email: firebaseUser.email || "",
-          name: firebaseUser.displayName || "",
-          picture: firebaseUser.photoURL || undefined,
-        });
-      } else {
-        // Redirect unauthenticated users to welcome page (replace history)
-        navigate("/", { replace: true });
-      }
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [setConfig, navigate, setUser]);
-
-  if (loading) {
-    return (
-      <div
-        className="h-full"
-        style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
-      >
-        <Loading className="h-full" />
-      </div>
-    );
-  }
+    // Redirect unauthenticated users to welcome page
+    if (!isAuthenticated) {
+      navigate("/", { replace: true });
+    }
+  }, [setConfig, navigate, isAuthenticated]);
 
   if (!user) {
     return (

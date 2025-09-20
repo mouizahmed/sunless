@@ -17,7 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-import { useUser } from "@/contexts/UserContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface NavItem {
   icon: LucideIcon;
@@ -41,7 +41,7 @@ function NavButton({ icon: Icon, label, onClick, isActive }: NavItem) {
 }
 
 export function AppSidebar() {
-  const { user, logout, logoutEverywhere } = useUser();
+  const { user, logout, logoutEverywhere } = useAuth();
   const navItems: NavItem[] = [
     {
       icon: Home,

@@ -6,11 +6,21 @@ import { DashboardLayout } from "./components/DashboardLayout";
 import { SidebarProvider } from "./components/ui/sidebar";
 import { useNavigationHistory } from "./hooks/useNavigationHistory";
 import { TopBarProvider, useTopBar } from "./contexts/TopBarContext";
-import { UserProvider } from "./contexts/UserContext";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import Loading from "./components/Loading";
 
 function AppLayout() {
   const { canGoBack, handleBack } = useNavigationHistory();
   const { config } = useTopBar();
+  const { isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <Loading />
+      </div>
+    );
+  }
 
   const handleSearch = () => {
     console.log("Search clicked");
@@ -25,7 +35,11 @@ function AppLayout() {
   };
 
   return (
-    <div className={`h-screen ${config.visible !== false ? 'grid grid-rows-[auto_1fr]' : 'flex flex-col'}`}>
+    <div
+      className={`h-screen ${
+        config.visible !== false ? "grid grid-rows-[auto_1fr]" : "flex flex-col"
+      }`}
+    >
       {config.visible !== false && (
         <TopBar
           onBack={handleBack}
@@ -41,7 +55,14 @@ function AppLayout() {
       <div className="overflow-hidden flex-1">
         <Routes>
           <Route path="/" element={<Welcome />} />
-          <Route path="/dashboard" element={<DashboardLayout><Dashboard /></DashboardLayout>} />
+          <Route
+            path="/dashboard"
+            element={
+              <DashboardLayout>
+                <Dashboard />
+              </DashboardLayout>
+            }
+          />
         </Routes>
       </div>
     </div>
@@ -51,13 +72,13 @@ function AppLayout() {
 function App() {
   return (
     <Router>
-      <TopBarProvider>
-        <UserProvider>
+      <AuthProvider>
+        <TopBarProvider>
           <SidebarProvider defaultOpen={true}>
             <AppLayout />
           </SidebarProvider>
-        </UserProvider>
-      </TopBarProvider>
+        </TopBarProvider>
+      </AuthProvider>
     </Router>
   );
 }
