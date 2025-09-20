@@ -2,8 +2,11 @@ import { HashRouter as Router, Routes, Route } from "react-router-dom";
 import Welcome from "./pages/Welcome";
 import Dashboard from "./pages/Dashboard";
 import TopBar from "./components/TopBar";
+import { DashboardLayout } from "./components/DashboardLayout";
+import { SidebarProvider } from "./components/ui/sidebar";
 import { useNavigationHistory } from "./hooks/useNavigationHistory";
 import { TopBarProvider, useTopBar } from "./contexts/TopBarContext";
+import { UserProvider } from "./contexts/UserContext";
 
 function AppLayout() {
   const { canGoBack, handleBack } = useNavigationHistory();
@@ -38,7 +41,7 @@ function AppLayout() {
       <div className="overflow-hidden flex-1">
         <Routes>
           <Route path="/" element={<Welcome />} />
-          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/dashboard" element={<DashboardLayout><Dashboard /></DashboardLayout>} />
         </Routes>
       </div>
     </div>
@@ -49,7 +52,11 @@ function App() {
   return (
     <Router>
       <TopBarProvider>
-        <AppLayout />
+        <UserProvider>
+          <SidebarProvider defaultOpen={true}>
+            <AppLayout />
+          </SidebarProvider>
+        </UserProvider>
       </TopBarProvider>
     </Router>
   );

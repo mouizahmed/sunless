@@ -2,6 +2,7 @@ import React from "react";
 import { ArrowLeft, Search, Upload, Video } from "lucide-react";
 import { useWindowState } from "@/hooks/useWindowState";
 import { Button } from "@/components/ui/button";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 
 interface TopBarProps {
   onBack?: () => void;
@@ -39,6 +40,7 @@ function TopBar({
       }
     >
       <div className="flex items-center gap-2">
+        <SidebarTrigger />
         <div className="flex items-center gap-2">
           <img src="./logo.png" alt="Sunless Logo" className="w-6 h-6" />
         </div>

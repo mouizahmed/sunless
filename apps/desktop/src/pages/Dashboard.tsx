@@ -1,22 +1,16 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useTopBar } from "@/contexts/TopBarContext";
+import { useUser } from "@/contexts/UserContext";
 import { useNavigate } from "react-router-dom";
 import { auth, onAuthStateChanged } from "@/config/firebase";
-import { getFirebaseIdToken, callBackendLogout } from "@/utils/firebase-api";
+import { getFirebaseIdToken } from "@/utils/firebase-api";
 import Loading from "@/components/Loading";
-
-interface User {
-  id: string;
-  email: string;
-  name: string;
-  picture?: string;
-}
 
 function Dashboard() {
   const { setConfig } = useTopBar();
+  const { user, setUser } = useUser();
   const navigate = useNavigate();
-  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -43,29 +37,7 @@ function Dashboard() {
     });
 
     return () => unsubscribe();
-  }, [setConfig, navigate]);
-
-  const handleLogout = async () => {
-    try {
-      await auth.signOut();
-      await window.electronAPI.logout();
-    } catch (error) {
-      console.error("Logout error:", error);
-    }
-  };
-
-  const handleLogoutEverywhere = async () => {
-    try {
-      const baseUrl =
-        (window as unknown as { BACKEND_URL?: string }).BACKEND_URL ||
-        "http://localhost:8080";
-      await callBackendLogout(baseUrl);
-      await auth.signOut();
-      await window.electronAPI.logout();
-    } catch (error) {
-      console.error("Global logout error:", error);
-    }
-  };
+  }, [setConfig, navigate, setUser]);
 
   if (loading) {
     return (
@@ -91,35 +63,9 @@ function Dashboard() {
 
   return (
     <div
-      className="flex flex-col h-full"
+      className="flex flex-col h-full p-4 bg-neutral-800 rounded-lg"
       style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
     >
-      {/* Profile Section */}
-      <div className="flex items-center gap-4 mb-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-        {user.picture && (
-          <img
-            src={user.picture}
-            alt="Profile"
-            className="w-16 h-16 rounded-full border-2 border-gray-200 dark:border-gray-700"
-          />
-        )}
-        <div className="flex-1">
-          <h2 className="text-2xl font-semibold">{user.name}</h2>
-          <p className="text-gray-600 dark:text-gray-400">{user.email}</p>
-        </div>
-        <div
-          className="flex gap-2"
-          style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
-        >
-          <Button variant="outline" onClick={handleLogout}>
-            Log out
-          </Button>
-          <Button variant="outline" onClick={handleLogoutEverywhere}>
-            Log out everywhere
-          </Button>
-        </div>
-      </div>
-
       {/* Main Dashboard Content */}
       <div className="flex-1 flex flex-col items-center justify-center">
         <div className="text-center max-w-md">
