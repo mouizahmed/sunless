@@ -40,10 +40,10 @@ function TopBar({
       }
     >
       <div className="flex items-center gap-2">
-        <SidebarTrigger />
         <div className="flex items-center gap-2">
           <img src="./logo.png" alt="Sunless Logo" className="w-6 h-6" />
         </div>
+        <SidebarTrigger />
 
         {showBackButton && (
           <Button

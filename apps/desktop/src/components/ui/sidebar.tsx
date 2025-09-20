@@ -56,7 +56,7 @@ export function Sidebar({ children, className }: SidebarProps) {
     <div
       className={cn(
         "transition-all duration-200 ease-in-out",
-        isOpen ? "w-56 pl-2 pb-2" : "w-0 overflow-hidden",
+        isOpen ? "w-56" : "w-0",
         className
       )}
     >
@@ -103,7 +103,7 @@ export function SidebarHeader({ children, className }: { children: React.ReactNo
 
 export function SidebarContent({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={cn("flex-1 overflow-y-auto", className)}>
+    <div className={cn("flex-1 overflow-y-auto overflow-x-hidden", className)}>
       {children}
     </div>
   );
