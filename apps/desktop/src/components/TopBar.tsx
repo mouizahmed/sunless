@@ -85,7 +85,7 @@ function TopBar({
             </Button>
             <Button
               variant="default"
-              className="px-2 py-1 h-auto rounded-md bg-violet-500 text-primary-foreground hover:bg-violet-600 text-xs"
+              className="px-2 py-1 h-auto rounded-md bg-violet-600 text-white hover:bg-violet-700 text-xs"
               onClick={onNewMeeting}
               style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
             >

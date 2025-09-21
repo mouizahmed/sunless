@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -24,6 +25,7 @@ import (
 
 type OAuthHandler struct {
 	userRepo        *repository.UserRepository
+	oauthTokenRepo  repository.OAuthTokenRepository
 	firebaseClient  *auth.FirebaseClient
 	codeManager     *auth.CodeManager
 	redisClient     *redis.Client
@@ -31,7 +33,7 @@ type OAuthHandler struct {
 	microsoftConfig *oauth2.Config
 }
 
-func NewOAuthHandler(userRepo *repository.UserRepository, redisClient *redis.Client) *OAuthHandler {
+func NewOAuthHandler(userRepo *repository.UserRepository, oauthTokenRepo repository.OAuthTokenRepository, redisClient *redis.Client) *OAuthHandler {
 	firebaseClient := auth.GetFirebaseClient()
 	codeManager := auth.NewCodeManager(redisClient)
 
@@ -40,7 +42,7 @@ func NewOAuthHandler(userRepo *repository.UserRepository, redisClient *redis.Cli
 		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 		Endpoint:     google.Endpoint,
-		Scopes:       []string{"openid", "email", "profile"},
+		Scopes:       []string{"openid", "email", "profile", "https://www.googleapis.com/auth/calendar.readonly"},
 		RedirectURL:  os.Getenv("GOOGLE_REDIRECT_URL"), // e.g., http://localhost:8080/auth/callback/google
 	}
 
@@ -49,12 +51,13 @@ func NewOAuthHandler(userRepo *repository.UserRepository, redisClient *redis.Cli
 		ClientID:     os.Getenv("MICROSOFT_CLIENT_ID"),
 		ClientSecret: os.Getenv("MICROSOFT_CLIENT_SECRET"),
 		Endpoint:     microsoft.AzureADEndpoint("common"),
-		Scopes:       []string{"openid", "email", "profile", "User.Read"},
+		Scopes:       []string{"openid", "email", "profile", "User.Read", "https://graph.microsoft.com/calendars.read", "offline_access"},
 		RedirectURL:  os.Getenv("MICROSOFT_REDIRECT_URL"), // e.g., http://localhost:8080/auth/callback/microsoft
 	}
 
 	return &OAuthHandler{
 		userRepo:        userRepo,
+		oauthTokenRepo:  oauthTokenRepo,
 		firebaseClient:  firebaseClient,
 		codeManager:     codeManager,
 		redisClient:     redisClient,
@@ -133,11 +136,14 @@ func (h *OAuthHandler) StartOAuth(c *gin.Context) {
 		}
 	}
 
-	// Get OAuth URL
+	// Get OAuth URL with offline access for refresh tokens
 	var authURL string
 	switch provider {
 	case "google":
-		authURL = h.googleConfig.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.ApprovalForce)
+		authURL = h.googleConfig.AuthCodeURL(state,
+			oauth2.AccessTypeOffline,
+			oauth2.ApprovalForce,
+			oauth2.SetAuthURLParam("include_granted_scopes", "true"))
 	case "microsoft":
 		authURL = h.microsoftConfig.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.ApprovalForce)
 	default:
@@ -209,13 +215,14 @@ func (h *OAuthHandler) HandleCallback(c *gin.Context) {
 
 	// Exchange code for token and get user info
 	var user *auth.OAuthUser
+	var oauthToken *oauth2.Token
 	var err error
 
 	switch provider {
 	case "google":
-		user, err = h.handleGoogleCallback(code)
+		user, oauthToken, err = h.handleGoogleCallback(code)
 	case "microsoft":
-		user, err = h.handleMicrosoftCallback(code)
+		user, oauthToken, err = h.handleMicrosoftCallback(code)
 	default:
 		errorMsg := "Unsupported provider"
 		log.Printf("❌ %s", errorMsg)
@@ -249,6 +256,12 @@ func (h *OAuthHandler) HandleCallback(c *gin.Context) {
 	_, err = h.firebaseClient.CreateOrUpdateUser(actualUserID, user.Email, user.Name, user.Picture)
 	if err != nil {
 		log.Printf("⚠️ Failed to create/update Firebase user (continuing anyway): %v", err)
+	}
+
+	// Store OAuth tokens in database
+	err = h.storeOAuthTokens(actualUserID, provider, oauthToken)
+	if err != nil {
+		log.Printf("⚠️ Failed to store OAuth tokens (continuing anyway): %v", err)
 	}
 
 	// Update the user object with the actual ID for session storage
@@ -381,24 +394,24 @@ func (h *OAuthHandler) Logout(c *gin.Context) {
 }
 
 // handleGoogleCallback exchanges code for token and gets user info from Google
-func (h *OAuthHandler) handleGoogleCallback(code string) (*auth.OAuthUser, error) {
+func (h *OAuthHandler) handleGoogleCallback(code string) (*auth.OAuthUser, *oauth2.Token, error) {
 	// Exchange authorization code for token
 	token, err := h.googleConfig.Exchange(oauth2.NoContext, code)
 	if err != nil {
-		return nil, fmt.Errorf("failed to exchange authorization code: %w", err)
+		return nil, nil, fmt.Errorf("failed to exchange authorization code: %w", err)
 	}
 
 	// Get user info from Google
 	client := h.googleConfig.Client(oauth2.NoContext, token)
 	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user info from Google: %w", err)
+		return nil, nil, fmt.Errorf("failed to get user info from Google: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read user info response: %w", err)
+		return nil, nil, fmt.Errorf("failed to read user info response: %w", err)
 	}
 
 	var googleUser struct {
@@ -409,37 +422,39 @@ func (h *OAuthHandler) handleGoogleCallback(code string) (*auth.OAuthUser, error
 	}
 
 	if err := json.Unmarshal(body, &googleUser); err != nil {
-		return nil, fmt.Errorf("failed to parse user info: %w", err)
+		return nil, nil, fmt.Errorf("failed to parse user info: %w", err)
 	}
 
-	return &auth.OAuthUser{
+	user := &auth.OAuthUser{
 		ID:       googleUser.ID,
 		Email:    googleUser.Email,
 		Name:     googleUser.Name,
 		Picture:  googleUser.Picture,
 		Provider: "google",
-	}, nil
+	}
+
+	return user, token, nil
 }
 
 // handleMicrosoftCallback exchanges code for token and gets user info from Microsoft
-func (h *OAuthHandler) handleMicrosoftCallback(code string) (*auth.OAuthUser, error) {
+func (h *OAuthHandler) handleMicrosoftCallback(code string) (*auth.OAuthUser, *oauth2.Token, error) {
 	// Exchange authorization code for token
 	token, err := h.microsoftConfig.Exchange(oauth2.NoContext, code)
 	if err != nil {
-		return nil, fmt.Errorf("failed to exchange authorization code: %w", err)
+		return nil, nil, fmt.Errorf("failed to exchange authorization code: %w", err)
 	}
 
 	// Get user info from Microsoft Graph
 	client := h.microsoftConfig.Client(oauth2.NoContext, token)
 	resp, err := client.Get("https://graph.microsoft.com/v1.0/me")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user info from microsoft: %w", err)
+		return nil, nil, fmt.Errorf("failed to get user info from microsoft: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read user info response: %w", err)
+		return nil, nil, fmt.Errorf("failed to read user info response: %w", err)
 	}
 
 	log.Printf("🔍 Microsoft Graph API response: %s", string(body))
@@ -454,7 +469,7 @@ func (h *OAuthHandler) handleMicrosoftCallback(code string) (*auth.OAuthUser, er
 	}
 
 	if err := json.Unmarshal(body, &microsoftUser); err != nil {
-		return nil, fmt.Errorf("failed to parse user info: %w", err)
+		return nil, nil, fmt.Errorf("failed to parse user info: %w", err)
 	}
 
 	log.Printf("📋 Parsed Microsoft user: ID=%s, Mail=%s, UPN=%s, DisplayName=%s",
@@ -462,7 +477,7 @@ func (h *OAuthHandler) handleMicrosoftCallback(code string) (*auth.OAuthUser, er
 
 	// Validate required fields
 	if microsoftUser.ID == "" {
-		return nil, fmt.Errorf("Microsoft user ID is empty")
+		return nil, nil, fmt.Errorf("Microsoft user ID is empty")
 	}
 
 	// Use the best available email field
@@ -471,7 +486,7 @@ func (h *OAuthHandler) handleMicrosoftCallback(code string) (*auth.OAuthUser, er
 		email = microsoftUser.UserPrincipalName
 	}
 	if email == "" {
-		return nil, fmt.Errorf("Microsoft user email is empty")
+		return nil, nil, fmt.Errorf("Microsoft user email is empty")
 	}
 
 	// Use the best available name field
@@ -495,7 +510,7 @@ func (h *OAuthHandler) handleMicrosoftCallback(code string) (*auth.OAuthUser, er
 
 	log.Printf("✅ Created Microsoft OAuthUser: ID=%s, Email=%s, Name=%s", user.ID, user.Email, user.Name)
 
-	return user, nil
+	return user, token, nil
 }
 
 // createOrUpdateUser creates or updates user in the database, returns the actual user ID to use for Firebase
@@ -650,10 +665,10 @@ func (h *OAuthHandler) renderErrorPage(c *gin.Context, title, message string) {
 <head>
     <title>Authentication Error</title>
     <style>
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-            text-align: center; 
-            padding: 60px 20px; 
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            text-align: center;
+            padding: 60px 20px;
             background: linear-gradient(135deg, #ff6b6b 0%%, #ee5a24 100%%);
             color: white;
             margin: 0;
@@ -666,12 +681,12 @@ func (h *OAuthHandler) renderErrorPage(c *gin.Context, title, message string) {
         .container { max-width: 400px; }
         h1 { font-size: 2.5em; margin-bottom: 20px; }
         p { font-size: 1.2em; margin-bottom: 30px; opacity: 0.9; }
-        .close-btn { 
-            background: rgba(255,255,255,0.2); 
+        .close-btn {
+            background: rgba(255,255,255,0.2);
             border: 2px solid rgba(255,255,255,0.3);
-            color: white; 
-            padding: 12px 24px; 
-            border-radius: 25px; 
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
             cursor: pointer;
             font-size: 16px;
             transition: all 0.3s ease;
@@ -690,4 +705,48 @@ func (h *OAuthHandler) renderErrorPage(c *gin.Context, title, message string) {
 
 	c.Header("Content-Type", "text/html")
 	c.String(http.StatusOK, html)
+}
+
+// storeOAuthTokens stores OAuth tokens in the database
+func (h *OAuthHandler) storeOAuthTokens(userID, provider string, token *oauth2.Token) error {
+	if token == nil {
+		return fmt.Errorf("token is nil")
+	}
+
+	// Convert scopes array to comma-separated string
+	var scopesStr *string
+	if len(h.googleConfig.Scopes) > 0 && provider == "google" {
+		scopes := strings.Join(h.googleConfig.Scopes, ",")
+		scopesStr = &scopes
+	} else if len(h.microsoftConfig.Scopes) > 0 && provider == "microsoft" {
+		scopes := strings.Join(h.microsoftConfig.Scopes, ",")
+		scopesStr = &scopes
+	}
+
+	// Prepare OAuth token model
+	oauthToken := &models.OAuthToken{
+		UserID:      userID,
+		Provider:    provider,
+		AccessToken: token.AccessToken,
+		Scopes:      scopesStr,
+	}
+
+	// Add refresh token if present
+	if token.RefreshToken != "" {
+		oauthToken.RefreshToken = &token.RefreshToken
+	}
+
+	// Add expiry if present and valid
+	if !token.Expiry.IsZero() {
+		oauthToken.ExpiresAt = &token.Expiry
+	}
+
+	// Store in database (upsert operation)
+	err := h.oauthTokenRepo.Create(oauthToken)
+	if err != nil {
+		return fmt.Errorf("failed to store OAuth token: %w", err)
+	}
+
+	log.Printf("🔐 Stored OAuth tokens for user %s (provider: %s)", userID, provider)
+	return nil
 }

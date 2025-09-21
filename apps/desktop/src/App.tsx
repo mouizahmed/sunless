@@ -1,6 +1,6 @@
 import { HashRouter as Router, Routes, Route } from "react-router-dom";
 import Welcome from "./pages/Welcome";
-import Dashboard from "./pages/Dashboard";
+import Home from "./pages/Home";
 import TopBar from "./components/TopBar";
 import { DashboardLayout } from "./components/DashboardLayout";
 import { SidebarProvider } from "./components/ui/sidebar";
@@ -59,7 +59,7 @@ function AppLayout() {
             path="/dashboard"
             element={
               <DashboardLayout>
-                <Dashboard />
+                <Home />
               </DashboardLayout>
             }
           />

@@ -124,7 +124,13 @@ export function SidebarContent({
   className?: string;
 }) {
   return (
-    <div className={cn("flex-1 overflow-y-auto overflow-x-hidden", className)}>
+    <div
+      className={cn("flex-1 overflow-y-auto overflow-x-auto sidebar-scrollbar", className)}
+      style={{
+        scrollbarWidth: 'thin',
+        scrollbarColor: 'rgb(163 163 163) transparent',
+      } as React.CSSProperties}
+    >
       {children}
     </div>
   );

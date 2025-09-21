@@ -18,6 +18,7 @@ import (
 	"github.com/mouizahmed/justscribe-backend/internal/middleware"
 	"github.com/mouizahmed/justscribe-backend/internal/repository"
 	"github.com/mouizahmed/justscribe-backend/internal/storage"
+	"github.com/mouizahmed/justscribe-backend/internal/utils"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -29,6 +30,11 @@ func main() {
 	err := godotenv.Load("cmd/api/.env")
 	if err != nil {
 		log.Fatal("Error loading cmd/api/.env file")
+	}
+
+	// Initialize encryption utilities
+	if err := utils.InitEncryption(); err != nil {
+		log.Fatalf("Failed to initialize encryption: %v", err)
 	}
 
 	// Initialize Firebase Admin SDK
@@ -45,6 +51,7 @@ func main() {
 
 	// Initialize repositories
 	userRepo := repository.NewUserRepository(db)
+	oauthTokenRepo := repository.NewOAuthTokenRepository(db)
 	tagRepo := repository.NewTagRepository(db.DB)
 	folderRepo := repository.NewFolderRepository(db, tagRepo)
 	fileRepo := repository.NewFileRepository(db)
@@ -81,7 +88,8 @@ func main() {
 	jobClient := jobs.NewClient(os.Getenv("REDIS_ADDR"), os.Getenv("REDIS_PASSWORD"))
 
 	// Initialize handlers
-	oauthHandler := handlers.NewOAuthHandler(userRepo, redisClient)
+	oauthHandler := handlers.NewOAuthHandler(userRepo, oauthTokenRepo, redisClient)
+	calendarHandler := handlers.NewCalendarHandler(oauthTokenRepo)
 	userHandler := handlers.NewUserHandler(userRepo)
 	folderHandler := handlers.NewFolderHandler(folderRepo)
 	tagHandler := handlers.NewTagHandler(tagRepo)
@@ -129,6 +137,9 @@ func main() {
 
 		// User routes
 		authenticated.GET("/user/me", userHandler.GetCurrentUser)
+
+		// Calendar routes
+		authenticated.GET("/calendar/upcoming", calendarHandler.GetUpcomingEvents)
 
 		// Folder routes
 		authenticated.GET("/folders", folderHandler.GetFolderData)
