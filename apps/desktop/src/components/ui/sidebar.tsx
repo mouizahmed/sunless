@@ -58,12 +58,12 @@ export function Sidebar({ children, className }: SidebarProps) {
   return (
     <div
       className={cn(
-        "transition-all duration-200 ease-in-out",
+        "transition-all duration-200 ease-in-out select-none",
         isOpen ? "w-56" : "w-0",
         className,
       )}
     >
-      <div className="h-full flex flex-col">{children}</div>
+      <div className="h-full flex flex-col select-none">{children}</div>
     </div>
   );
 }

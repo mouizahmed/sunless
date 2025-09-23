@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Calendar, FileText } from "lucide-react";
 import { makeAuthenticatedApiCall } from "@/utils/firebase-api";
+import { webSocketManager, WS_MESSAGE_TYPES } from "@/utils/websocket";
 
 interface Meeting {
   id: string;
@@ -95,6 +96,57 @@ export function UpcomingMeetings() {
   useEffect(() => {
     console.log("📅 UpcomingMeetings component mounted, fetching meetings...");
     fetchUpcomingMeetings();
+
+    // Subscribe to WebSocket calendar updates
+    const unsubscribe = webSocketManager.subscribe(
+      WS_MESSAGE_TYPES.CALENDAR_UPDATED,
+      (data: unknown) => {
+        console.log("📅 Received calendar update via WebSocket:", data);
+
+        // Type guard to ensure data has the expected structure
+        if (data && typeof data === 'object' && 'events' in data) {
+          const events = (data as { events: CalendarEvent[] }).events;
+
+          if (Array.isArray(events)) {
+            const formattedMeetings: Meeting[] = events.map((event: CalendarEvent) => ({
+              id: event.id,
+              title: event.title,
+              start: event.start,
+              end: event.end,
+              location: event.location,
+              organizer: event.organizer,
+              provider: event.provider,
+              is_meeting: event.is_meeting,
+              attendees: event.attendees,
+            }));
+
+            console.log("📅 Updated meetings from WebSocket:", formattedMeetings);
+            setMeetings(formattedMeetings);
+          }
+        } else if (Array.isArray(data)) {
+          // Direct array of events
+          const formattedMeetings: Meeting[] = (data as CalendarEvent[]).map((event: CalendarEvent) => ({
+            id: event.id,
+            title: event.title,
+            start: event.start,
+            end: event.end,
+            location: event.location,
+            organizer: event.organizer,
+            provider: event.provider,
+            is_meeting: event.is_meeting,
+            attendees: event.attendees,
+          }));
+
+          console.log("📅 Updated meetings from WebSocket:", formattedMeetings);
+          setMeetings(formattedMeetings);
+        }
+      }
+    );
+
+    // Cleanup WebSocket subscription on unmount
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const formatMeetingDate = (startTime: string) => {

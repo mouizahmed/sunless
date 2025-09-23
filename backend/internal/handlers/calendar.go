@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -18,7 +20,12 @@ import (
 )
 
 type CalendarHandler struct {
-	oauthTokenRepo repository.OAuthTokenRepository
+	oauthTokenRepo  repository.OAuthTokenRepository
+	wsHandler       *WebSocketHandler
+	pollingInterval time.Duration
+	stopPolling     chan bool
+	pollingActive   bool
+	pollingMutex    sync.RWMutex
 }
 
 type CalendarEvent struct {
@@ -36,7 +43,86 @@ type CalendarEvent struct {
 
 func NewCalendarHandler(oauthTokenRepo repository.OAuthTokenRepository) *CalendarHandler {
 	return &CalendarHandler{
-		oauthTokenRepo: oauthTokenRepo,
+		oauthTokenRepo:  oauthTokenRepo,
+		pollingInterval: 30 * time.Second, // Poll every 30 seconds
+		stopPolling:     make(chan bool),
+	}
+}
+
+// SetWebSocketHandler sets the WebSocket handler for broadcasting updates
+func (h *CalendarHandler) SetWebSocketHandler(wsHandler *WebSocketHandler) {
+	h.wsHandler = wsHandler
+}
+
+// StartPolling begins polling for calendar changes for all connected users
+func (h *CalendarHandler) StartPolling() {
+	h.pollingMutex.Lock()
+	if h.pollingActive {
+		h.pollingMutex.Unlock()
+		return
+	}
+	h.pollingActive = true
+	h.pollingMutex.Unlock()
+
+	log.Printf("📅 Starting calendar polling every %v", h.pollingInterval)
+
+	go func() {
+		ticker := time.NewTicker(h.pollingInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				h.pollCalendarChanges()
+			case <-h.stopPolling:
+				log.Printf("📅 Stopping calendar polling")
+				return
+			}
+		}
+	}()
+}
+
+// StopPolling stops the calendar polling
+func (h *CalendarHandler) StopPolling() {
+	h.pollingMutex.Lock()
+	defer h.pollingMutex.Unlock()
+
+	if !h.pollingActive {
+		return
+	}
+
+	h.pollingActive = false
+	select {
+	case h.stopPolling <- true:
+	default:
+	}
+}
+
+// pollCalendarChanges checks for calendar changes for all connected users
+func (h *CalendarHandler) pollCalendarChanges() {
+	if h.wsHandler == nil {
+		return
+	}
+
+	connectedUsers := h.wsHandler.GetConnectedUsers()
+	if len(connectedUsers) == 0 {
+		return
+	}
+
+	log.Printf("📅 Polling calendar changes for %d connected users", len(connectedUsers))
+
+	for _, userID := range connectedUsers {
+		events, err := h.getUpcomingEvents(userID, 3)
+		if err != nil {
+			log.Printf("❌ Failed to get calendar events for user %s: %v", userID, err)
+			continue
+		}
+
+		// Broadcast the updated events to the user
+		err = h.wsHandler.BroadcastCalendarUpdate(userID, events)
+		if err != nil {
+			log.Printf("❌ Failed to broadcast calendar update to user %s: %v", userID, err)
+		}
 	}
 }
 
@@ -62,6 +148,7 @@ func (h *CalendarHandler) GetUpcomingEvents(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
 		"events": events,
 	})
 }

@@ -90,6 +90,10 @@ func main() {
 	// Initialize handlers
 	oauthHandler := handlers.NewOAuthHandler(userRepo, oauthTokenRepo, redisClient)
 	calendarHandler := handlers.NewCalendarHandler(oauthTokenRepo)
+	webSocketHandler := handlers.NewWebSocketHandler()
+
+	// Connect calendar handler with WebSocket handler for real-time updates
+	calendarHandler.SetWebSocketHandler(webSocketHandler)
 	userHandler := handlers.NewUserHandler(userRepo)
 	folderHandler := handlers.NewFolderHandler(folderRepo)
 	tagHandler := handlers.NewTagHandler(tagRepo)
@@ -118,6 +122,9 @@ func main() {
 		api.GET("/health", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"status": "ok"})
 		})
+
+		// WebSocket routes (handles its own authentication)
+		api.GET("/ws", webSocketHandler.HandleWebSocket)
 	}
 
 	// OAuth routes (no auth required)
@@ -190,6 +197,9 @@ func main() {
 		// authenticated.GET("/events/stream", sseHandler.StreamEvents)
 		// authenticated.GET("/events/connections", sseHandler.GetActiveConnections)
 	}
+
+	// Start calendar polling for real-time updates
+	calendarHandler.StartPolling()
 
 	// Start the server
 	port := os.Getenv("API_PORT")

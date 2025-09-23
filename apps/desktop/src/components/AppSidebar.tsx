@@ -400,7 +400,7 @@ export function AppSidebar({ activeView }: AppSidebarProps) {
             </div>
           </div>
           {foldersExpanded && (
-            <div className="mt-2 min-w-fit">
+            <div className="mt-0.5 min-w-fit">
               <FolderTree
                 folders={folders}
                 activeFolderId={activeFolderId}

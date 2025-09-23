@@ -32,7 +32,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <div className={`flex h-full px-2 pb-2 ${isOpen ? "gap-2" : ""}`}>
       <AppSidebar activeView={activeView} />
-      <div className="flex-1 overflow-hidden">{children}</div>
+      <div className="flex-1 overflow-hidden select-none">{children}</div>
     </div>
   );
 }
