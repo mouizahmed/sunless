@@ -1,25 +1,62 @@
 import { HashRouter as Router, Routes, Route } from "react-router-dom";
+import { useState, useEffect } from "react";
 import Welcome from "./pages/Welcome";
-import Home from "./pages/Home";
 import TopBar from "./components/TopBar";
 import { DashboardLayout } from "./components/DashboardLayout";
 import { SidebarProvider } from "./components/ui/sidebar";
 import { useNavigationHistory } from "./hooks/useNavigationHistory";
 import { TopBarProvider, useTopBar } from "./contexts/TopBarContext";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { WorkspaceProvider } from "./contexts/WorkspaceContext";
+import { useWorkspace } from "./hooks/useWorkspace";
+import { FolderNavigationProvider } from "./contexts/FolderNavigationContext";
+import { CreateWorkspaceScreen } from "./components/CreateWorkspaceScreen";
 import Loading from "./components/Loading";
+import { CriticalError } from "./components/CriticalError";
+import { webSocketManager } from "./utils/websocket";
 
 function AppLayout() {
   const { canGoBack, handleBack } = useNavigationHistory();
   const { config } = useTopBar();
-  const { isLoading } = useAuth();
+  const { isLoading, user } = useAuth();
+  const { workspaces, isLoading: workspacesLoading } = useWorkspace();
+  const [wsError, setWsError] = useState(false);
 
-  if (isLoading) {
+  // Subscribe to WebSocket critical errors
+  useEffect(() => {
+    const unsubscribe = webSocketManager.onError(() => {
+      setWsError(true);
+    });
+
+    return unsubscribe;
+  }, []);
+
+  // Show WebSocket error screen
+  if (wsError) {
+    return (
+      <CriticalError
+        title="Connection lost"
+        message="Unable to maintain connection to the server. Please check your internet connection and try again."
+        onRetry={() => {
+          setWsError(false);
+          webSocketManager.initialize();
+        }}
+        retryText="Reconnect"
+      />
+    );
+  }
+
+  if (isLoading || workspacesLoading) {
     return (
       <div className="h-screen flex items-center justify-center">
         <Loading />
       </div>
     );
+  }
+
+  // Show workspace creation screen if user is authenticated but has no workspaces
+  if (user && !workspacesLoading && workspaces.length === 0) {
+    return <CreateWorkspaceScreen />;
   }
 
   const handleSearch = () => {
@@ -55,14 +92,7 @@ function AppLayout() {
       <div className="overflow-hidden flex-1">
         <Routes>
           <Route path="/welcome" element={<Welcome />} />
-          <Route
-            path="/dashboard"
-            element={
-              <DashboardLayout>
-                <Home />
-              </DashboardLayout>
-            }
-          />
+          <Route path="/dashboard/*" element={<DashboardLayout />} />
           <Route path="/" element={<div />} />
         </Routes>
       </div>
@@ -74,11 +104,15 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <TopBarProvider>
-          <SidebarProvider defaultOpen={true}>
-            <AppLayout />
-          </SidebarProvider>
-        </TopBarProvider>
+        <WorkspaceProvider>
+          <FolderNavigationProvider>
+            <TopBarProvider>
+              <SidebarProvider defaultOpen={true}>
+                <AppLayout />
+              </SidebarProvider>
+            </TopBarProvider>
+          </FolderNavigationProvider>
+        </WorkspaceProvider>
       </AuthProvider>
     </Router>
   );

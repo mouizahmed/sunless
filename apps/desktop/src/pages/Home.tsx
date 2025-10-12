@@ -15,6 +15,8 @@ function Home() {
     });
   }, [setConfig]);
 
+  // No need to reset folder navigation - handled by DashboardLayout
+
   if (!user) {
     return (
       <div
@@ -28,18 +30,19 @@ function Home() {
 
   return (
     <div className="w-full h-full flex flex-col gap-2">
-      {/* Full-width Upcoming Meetings Section */}
+      {/* Dashboard Home - Show Upcoming Meetings */}
       <div className="bg-neutral-50 dark:bg-neutral-900 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6">
         <UpcomingMeetings />
       </div>
 
-      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6 flex-1">
-        <h3 className="text-lg font-medium text-neutral-900 dark:text-neutral-100 mb-2">
-          Recent Notes
-        </h3>
-        <p className="text-neutral-600 dark:text-neutral-400 text-sm">
-          Quick access to your recently edited notes and documents.
-        </p>
+      {/* Recent Activity or Other Dashboard Content */}
+      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 flex-1 overflow-hidden">
+        <div className="p-6">
+          <h2 className="text-lg font-semibold mb-4">Recent Activity</h2>
+          <p className="text-neutral-600 dark:text-neutral-400">
+            No recent activity
+          </p>
+        </div>
       </div>
     </div>
   );

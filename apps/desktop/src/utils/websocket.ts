@@ -6,17 +6,20 @@ export interface WSMessage {
 }
 
 export type MessageHandler = (data: unknown) => void;
+export type ErrorHandler = () => void;
 
 class WebSocketManager {
   private ws: WebSocket | null = null;
   private handlers: Map<string, MessageHandler[]> = new Map();
+  private errorHandlers: ErrorHandler[] = [];
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000; // Start with 1 second
   private isConnecting = false;
+  private shouldAutoConnect = false;
 
   constructor() {
-    this.connect();
+    // Don't auto-connect - wait for explicit connection
   }
 
   private async connect() {
@@ -78,8 +81,20 @@ class WebSocketManager {
   }
 
   private attemptReconnect() {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error("❌ Max WebSocket reconnection attempts reached");
+    if (!this.shouldAutoConnect || this.reconnectAttempts >= this.maxReconnectAttempts) {
+      if (!this.shouldAutoConnect) {
+        console.log("🔌 WebSocket auto-reconnect disabled");
+      } else {
+        console.error("❌ Max WebSocket reconnection attempts reached");
+        // Trigger error handlers after max attempts
+        this.errorHandlers.forEach(handler => {
+          try {
+            handler();
+          } catch (error) {
+            console.error("❌ Error in WebSocket error handler:", error);
+          }
+        });
+      }
       return;
     }
 
@@ -130,11 +145,36 @@ class WebSocketManager {
     };
   }
 
+  public onError(handler: ErrorHandler) {
+    this.errorHandlers.push(handler);
+
+    console.log("📝 Subscribed to WebSocket critical errors");
+
+    // Return unsubscribe function
+    return () => {
+      const index = this.errorHandlers.indexOf(handler);
+      if (index > -1) {
+        this.errorHandlers.splice(index, 1);
+        console.log("🗑️ Unsubscribed from WebSocket critical errors");
+      }
+    };
+  }
+
+  public initialize() {
+    console.log("🔌 Initializing WebSocket connection...");
+    this.shouldAutoConnect = true;
+    this.reconnectAttempts = 0;
+    this.reconnectDelay = 1000;
+    this.connect();
+  }
+
   public isConnected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN;
   }
 
   public disconnect() {
+    console.log("🔌 Disconnecting WebSocket...");
+    this.shouldAutoConnect = false;
     if (this.ws) {
       this.ws.close();
       this.ws = null;

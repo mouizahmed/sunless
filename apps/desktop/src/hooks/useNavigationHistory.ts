@@ -1,14 +1,12 @@
-import { useNavigate } from 'react-router-dom';
+import { useFolderNavigation } from "@/contexts/FolderNavigationContext";
 
 export function useNavigationHistory() {
-  const navigate = useNavigate();
+  const { goBack, canGoBack } = useFolderNavigation();
 
   const handleBack = () => {
-    navigate(-1);
+    console.log("🔙 Back button clicked");
+    goBack();
   };
-
-  // Check if user can go back using browser history
-  const canGoBack = window.history.length > 1;
 
   return {
     canGoBack,

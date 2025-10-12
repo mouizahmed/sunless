@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { auth, onAuthStateChanged, signInWithCustomToken } from "@/config/firebase";
+import { webSocketManager } from "@/utils/websocket";
 
 interface User {
   id: string;
@@ -80,12 +81,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           picture: firebaseUser.photoURL || undefined,
         });
 
+        // Initialize WebSocket connection when user is authenticated
+        webSocketManager.initialize();
+
         // Redirect authenticated users to dashboard
         if (location.pathname === "/" || location.pathname === "/welcome") {
           navigate("/dashboard", { replace: true });
         }
       } else {
         setUser(null);
+
+        // Disconnect WebSocket when user logs out
+        webSocketManager.disconnect();
 
         // Redirect unauthenticated users to welcome page
         if (location.pathname === "/" || location.pathname === "/dashboard") {
@@ -103,6 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
+      webSocketManager.disconnect();
       await auth.signOut();
       await window.electronAPI.logout();
       setUser(null);
@@ -115,6 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { callBackendLogout } = await import("@/utils/firebase-api");
 
+      webSocketManager.disconnect();
       const baseUrl = (window as unknown as { BACKEND_URL?: string }).BACKEND_URL || "http://localhost:8080";
       await callBackendLogout(baseUrl);
       await auth.signOut();

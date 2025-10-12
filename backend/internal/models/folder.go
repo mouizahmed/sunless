@@ -3,14 +3,17 @@ package models
 import "time"
 
 type Folder struct {
-	ID        string     `json:"id" db:"id"`
-	Name      string     `json:"name" db:"name"`
-	ParentID  *string    `json:"parent_id" db:"parent_id"`
-	UserID    string     `json:"user_id" db:"user_id"`
-	Tags      []Tag      `json:"tags,omitempty"`
-	CreatedAt time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at" db:"updated_at"`
-	DeletedAt *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
+	ID              string     `json:"id" db:"id"`
+	Name            string     `json:"name" db:"name"`
+	ParentID        *string    `json:"parent_id" db:"parent_id"`
+	UserID          string     `json:"user_id" db:"user_id"`
+	WorkspaceID     string     `json:"workspace_id" db:"workspace_id"`
+	AccessMode      string     `json:"access_mode" db:"access_mode"`
+	InheritSettings bool       `json:"inherit_settings" db:"inherit_settings"`
+	Tags            []Tag      `json:"tags,omitempty"`
+	CreatedAt       time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at" db:"updated_at"`
+	DeletedAt       *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
 }
 
 type File struct {
@@ -51,8 +54,11 @@ type FolderDataResponse struct {
 }
 
 type CreateFolderRequest struct {
-	Name     string  `json:"name" binding:"required"`
-	ParentID *string `json:"parent_id"`
+	Name            string  `json:"name" binding:"required"`
+	ParentID        *string `json:"parent_id"`
+	WorkspaceID     string  `json:"workspace_id" binding:"required"`
+	AccessMode      string  `json:"access_mode"`
+	InheritSettings bool    `json:"inherit_settings"`
 }
 
 type UpdateFolderRequest struct {
@@ -61,5 +67,34 @@ type UpdateFolderRequest struct {
 
 type MoveFolderRequest struct {
 	ParentID *string `json:"parent_id"`
+}
+
+type FolderAccess struct {
+	ID         string    `json:"id" db:"id"`
+	FolderID   string    `json:"folder_id" db:"folder_id"`
+	UserID     string    `json:"user_id" db:"user_id"`
+	AccessType string    `json:"access_type" db:"access_type"`
+	GrantedBy  string    `json:"granted_by" db:"granted_by"`
+	CreatedAt  time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at" db:"updated_at"`
+}
+
+type ShareFolderRequest struct {
+	UserEmails  []string `json:"user_emails" binding:"required"`
+	AccessType  string   `json:"access_type" binding:"required"`
+}
+
+type UpdateFolderSettingsRequest struct {
+	AccessMode      *string `json:"access_mode"`
+	InheritSettings *bool   `json:"inherit_settings"`
+}
+
+type FolderMemberResponse struct {
+	UserID      string    `json:"user_id"`
+	Email       string    `json:"email"`
+	Name        string    `json:"name"`
+	AccessType  string    `json:"access_type"`
+	GrantedBy   string    `json:"granted_by"`
+	GrantedAt   time.Time `json:"granted_at"`
 }
 

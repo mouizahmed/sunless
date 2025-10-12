@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Calendar, FileText } from "lucide-react";
+// Icons removed - not used in this component
 import { makeAuthenticatedApiCall } from "@/utils/firebase-api";
 import { webSocketManager, WS_MESSAGE_TYPES } from "@/utils/websocket";
 
@@ -28,60 +28,84 @@ interface CalendarEvent {
   attendees?: string[];
 }
 
-
 export function UpcomingMeetings() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showOnlyMeetings, setShowOnlyMeetings] = useState(false);
 
+  // Simple cache key for calendar events
+  const cacheKey = "calendar_events";
+
   const fetchUpcomingMeetings = async () => {
     try {
       setLoading(true);
       setError(null);
 
+      // Try cache first
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        // Cache valid for 2 minutes (calendar events change less frequently than expected)
+        if (Date.now() - timestamp < 2 * 60 * 1000) {
+          console.log("🚀 Calendar events loaded from cache instantly");
+          setMeetings(data);
+          setLoading(false);
+          return;
+        }
+      }
+
       // Get base URL for API calls
-      const baseUrl = (window as unknown as { BACKEND_URL?: string }).BACKEND_URL || "http://localhost:8080";
-      console.log("📅 Fetching calendar events from:", `${baseUrl}/api/calendar/upcoming?limit=3`);
+      const baseUrl =
+        (window as unknown as { BACKEND_URL?: string }).BACKEND_URL ||
+        "http://localhost:8080";
+      console.log("📡 Fetching calendar events from API...");
 
-      // Fetch upcoming events from backend using authenticated API call
+      const startTime = Date.now();
       const response = await makeAuthenticatedApiCall(
-        `${baseUrl}/api/calendar/upcoming?limit=3`
+        `${baseUrl}/api/calendar/upcoming?limit=3`,
       );
-
-      console.log("📅 Calendar API response status:", response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
         console.error("📅 Calendar API error response:", errorText);
-        throw new Error(`Failed to fetch calendar events: ${response.status} - ${errorText}`);
+        throw new Error(
+          `Failed to fetch calendar events: ${response.status} - ${errorText}`,
+        );
       }
 
       const data = await response.json();
-      console.log("📅 Calendar API response data:", data);
+      const endTime = Date.now();
+      console.log(`📡 Calendar events fetched in ${endTime - startTime}ms`);
 
       if (data.status === "success" && data.events) {
-        console.log("📅 Found events:", data.events.length);
-        console.log("📅 Events details:", data.events);
+        const formattedMeetings: Meeting[] = data.events.map(
+          (event: CalendarEvent) => ({
+            id: event.id,
+            title: event.title,
+            start: event.start,
+            end: event.end,
+            location: event.location,
+            organizer: event.organizer,
+            provider: event.provider,
+            is_meeting: event.is_meeting,
+            attendees: event.attendees,
+          }),
+        );
 
-        const formattedMeetings: Meeting[] = data.events.map((event: CalendarEvent) => ({
-          id: event.id,
-          title: event.title,
-          start: event.start,
-          end: event.end,
-          location: event.location,
-          organizer: event.organizer,
-          provider: event.provider,
-          is_meeting: event.is_meeting,
-          attendees: event.attendees,
-        }));
-
-        console.log("📅 Formatted meetings:", formattedMeetings);
+        console.log("📅 Found", formattedMeetings.length, "calendar events");
         setMeetings(formattedMeetings);
+
+        // Cache the result
+        localStorage.setItem(
+          cacheKey,
+          JSON.stringify({
+            data: formattedMeetings,
+            timestamp: Date.now(),
+          }),
+        );
       } else {
-        console.log("📅 No events found or unexpected response format");
-        console.log("📅 Response status:", data.status);
-        console.log("📅 Response events:", data.events);
+        console.log("📅 No events found");
         setMeetings([]);
       }
     } catch (err) {
@@ -104,11 +128,34 @@ export function UpcomingMeetings() {
         console.log("📅 Received calendar update via WebSocket:", data);
 
         // Type guard to ensure data has the expected structure
-        if (data && typeof data === 'object' && 'events' in data) {
+        if (data && typeof data === "object" && "events" in data) {
           const events = (data as { events: CalendarEvent[] }).events;
 
           if (Array.isArray(events)) {
-            const formattedMeetings: Meeting[] = events.map((event: CalendarEvent) => ({
+            const formattedMeetings: Meeting[] = events.map(
+              (event: CalendarEvent) => ({
+                id: event.id,
+                title: event.title,
+                start: event.start,
+                end: event.end,
+                location: event.location,
+                organizer: event.organizer,
+                provider: event.provider,
+                is_meeting: event.is_meeting,
+                attendees: event.attendees,
+              }),
+            );
+
+            console.log(
+              "📅 Updated meetings from WebSocket:",
+              formattedMeetings,
+            );
+            setMeetings(formattedMeetings);
+          }
+        } else if (Array.isArray(data)) {
+          // Direct array of events
+          const formattedMeetings: Meeting[] = (data as CalendarEvent[]).map(
+            (event: CalendarEvent) => ({
               id: event.id,
               title: event.title,
               start: event.start,
@@ -118,29 +165,13 @@ export function UpcomingMeetings() {
               provider: event.provider,
               is_meeting: event.is_meeting,
               attendees: event.attendees,
-            }));
-
-            console.log("📅 Updated meetings from WebSocket:", formattedMeetings);
-            setMeetings(formattedMeetings);
-          }
-        } else if (Array.isArray(data)) {
-          // Direct array of events
-          const formattedMeetings: Meeting[] = (data as CalendarEvent[]).map((event: CalendarEvent) => ({
-            id: event.id,
-            title: event.title,
-            start: event.start,
-            end: event.end,
-            location: event.location,
-            organizer: event.organizer,
-            provider: event.provider,
-            is_meeting: event.is_meeting,
-            attendees: event.attendees,
-          }));
+            }),
+          );
 
           console.log("📅 Updated meetings from WebSocket:", formattedMeetings);
           setMeetings(formattedMeetings);
         }
-      }
+      },
     );
 
     // Cleanup WebSocket subscription on unmount
@@ -151,7 +182,9 @@ export function UpcomingMeetings() {
 
   const formatMeetingDate = (startTime: string) => {
     const date = new Date(startTime);
-    const month = date.toLocaleDateString("en-US", { month: "short" }).toUpperCase();
+    const month = date
+      .toLocaleDateString("en-US", { month: "short" })
+      .toUpperCase();
     const day = date.getDate();
     return { month, day: day.toString() };
   };
@@ -162,7 +195,7 @@ export function UpcomingMeetings() {
     const time = date.toLocaleTimeString("en-US", {
       hour: "numeric",
       minute: "2-digit",
-      hour12: true
+      hour12: true,
     });
     return `${dayName} ${time}`;
   };
@@ -197,11 +230,18 @@ export function UpcomingMeetings() {
     );
   }
 
-  console.log("📅 Rendering UpcomingMeetings - meetings:", meetings, "loading:", loading, "error:", error);
+  console.log(
+    "📅 Rendering UpcomingMeetings - meetings:",
+    meetings,
+    "loading:",
+    loading,
+    "error:",
+    error,
+  );
 
   // Filter meetings based on toggle
   const filteredMeetings = showOnlyMeetings
-    ? meetings.filter(meeting => meeting.is_meeting)
+    ? meetings.filter((meeting) => meeting.is_meeting)
     : meetings;
 
   return (
@@ -255,7 +295,8 @@ export function UpcomingMeetings() {
                   )}
                   {meeting.attendees && meeting.attendees.length > 0 && (
                     <p className="text-xs text-neutral-500 dark:text-neutral-500">
-                      👥 {meeting.attendees.length} attendee{meeting.attendees.length !== 1 ? 's' : ''}
+                      👥 {meeting.attendees.length} attendee
+                      {meeting.attendees.length !== 1 ? "s" : ""}
                     </p>
                   )}
                 </div>

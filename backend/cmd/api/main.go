@@ -52,6 +52,7 @@ func main() {
 	// Initialize repositories
 	userRepo := repository.NewUserRepository(db)
 	oauthTokenRepo := repository.NewOAuthTokenRepository(db)
+	workspaceRepo := repository.NewWorkspaceRepository(db)
 	tagRepo := repository.NewTagRepository(db.DB)
 	folderRepo := repository.NewFolderRepository(db, tagRepo)
 	fileRepo := repository.NewFileRepository(db)
@@ -88,14 +89,15 @@ func main() {
 	jobClient := jobs.NewClient(os.Getenv("REDIS_ADDR"), os.Getenv("REDIS_PASSWORD"))
 
 	// Initialize handlers
-	oauthHandler := handlers.NewOAuthHandler(userRepo, oauthTokenRepo, redisClient)
+	oauthHandler := handlers.NewOAuthHandler(userRepo, workspaceRepo, oauthTokenRepo, redisClient)
 	calendarHandler := handlers.NewCalendarHandler(oauthTokenRepo)
 	webSocketHandler := handlers.NewWebSocketHandler()
 
 	// Connect calendar handler with WebSocket handler for real-time updates
 	calendarHandler.SetWebSocketHandler(webSocketHandler)
 	userHandler := handlers.NewUserHandler(userRepo)
-	folderHandler := handlers.NewFolderHandler(folderRepo)
+	workspaceHandler := handlers.NewWorkspaceHandler(workspaceRepo)
+	folderHandler := handlers.NewFolderHandler(folderRepo, workspaceRepo)
 	tagHandler := handlers.NewTagHandler(tagRepo)
 	uploadHandler := handlers.NewUploadHandler(fileRepo, b2Client)
 	glossaryHandler := handlers.NewGlossaryHandler(glossaryRepo)
@@ -145,6 +147,13 @@ func main() {
 		// User routes
 		authenticated.GET("/user/me", userHandler.GetCurrentUser)
 
+		// Workspace routes
+		authenticated.GET("/workspaces", workspaceHandler.GetUserWorkspaces)
+		authenticated.GET("/workspaces/:id", workspaceHandler.GetWorkspace)
+		authenticated.POST("/workspaces", workspaceHandler.CreateWorkspace)
+		authenticated.PATCH("/workspaces/:id", workspaceHandler.UpdateWorkspace)
+		authenticated.DELETE("/workspaces/:id", workspaceHandler.DeleteWorkspace)
+
 		// Calendar routes
 		authenticated.GET("/calendar/upcoming", calendarHandler.GetUpcomingEvents)
 
@@ -152,10 +161,17 @@ func main() {
 		authenticated.GET("/folders", folderHandler.GetFolderData)
 		authenticated.GET("/folders/:id", folderHandler.GetFolderData)
 		authenticated.GET("/folders/all", folderHandler.GetAllFolders)
+		authenticated.GET("/folders/shared", folderHandler.GetSharedFolders)
 		authenticated.POST("/folders", folderHandler.CreateFolder)
 		authenticated.PATCH("/folders/:id", folderHandler.UpdateFolder)
 		authenticated.PATCH("/folders/:id/move", folderHandler.MoveFolder)
 		authenticated.DELETE("/folders/:id", folderHandler.DeleteFolder)
+
+		// Folder sharing and access control routes
+		authenticated.POST("/folders/:id/share", folderHandler.ShareFolder)
+		authenticated.GET("/folders/:id/members", folderHandler.GetFolderMembers)
+		authenticated.DELETE("/folders/:id/access/:userId", folderHandler.RemoveFolderAccess)
+		authenticated.PUT("/folders/:id/settings", folderHandler.UpdateFolderSettings)
 
 		// Tag routes
 		authenticated.GET("/items/:item_id/tags", tagHandler.GetItemTags)

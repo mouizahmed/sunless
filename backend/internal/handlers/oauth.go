@@ -25,6 +25,7 @@ import (
 
 type OAuthHandler struct {
 	userRepo        *repository.UserRepository
+	workspaceRepo   *repository.WorkspaceRepository
 	oauthTokenRepo  repository.OAuthTokenRepository
 	firebaseClient  *auth.FirebaseClient
 	codeManager     *auth.CodeManager
@@ -33,7 +34,7 @@ type OAuthHandler struct {
 	microsoftConfig *oauth2.Config
 }
 
-func NewOAuthHandler(userRepo *repository.UserRepository, oauthTokenRepo repository.OAuthTokenRepository, redisClient *redis.Client) *OAuthHandler {
+func NewOAuthHandler(userRepo *repository.UserRepository, workspaceRepo *repository.WorkspaceRepository, oauthTokenRepo repository.OAuthTokenRepository, redisClient *redis.Client) *OAuthHandler {
 	firebaseClient := auth.GetFirebaseClient()
 	codeManager := auth.NewCodeManager(redisClient)
 
@@ -57,6 +58,7 @@ func NewOAuthHandler(userRepo *repository.UserRepository, oauthTokenRepo reposit
 
 	return &OAuthHandler{
 		userRepo:        userRepo,
+		workspaceRepo:   workspaceRepo,
 		oauthTokenRepo:  oauthTokenRepo,
 		firebaseClient:  firebaseClient,
 		codeManager:     codeManager,
@@ -343,6 +345,16 @@ func (h *OAuthHandler) CompleteAuth(c *gin.Context) {
 	}
 
 	log.Printf("✅ One-time code validated successfully for user: %s (%s)", oneTimeCode.User.Name, oneTimeCode.User.Email)
+
+	// Ensure user has at least one workspace (for both new and existing users)
+	log.Printf("🔧 Ensuring user has workspace access: %s", oneTimeCode.User.Email)
+	_, err = h.workspaceRepo.EnsureUserHasWorkspace(oneTimeCode.User.ID, oneTimeCode.User.Name, oneTimeCode.User.Email)
+	if err != nil {
+		log.Printf("⚠️ Failed to ensure workspace access for user %s: %v (continuing anyway)", oneTimeCode.User.Email, err)
+		// Don't fail the auth completion if workspace creation fails
+	} else {
+		log.Printf("✅ Successfully ensured workspace access for user: %s", oneTimeCode.User.Email)
+	}
 
 	// Return the user data and Firebase token
 	c.JSON(http.StatusOK, gin.H{

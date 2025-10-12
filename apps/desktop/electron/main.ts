@@ -1,4 +1,4 @@
-import { app } from "electron";
+import { app, BrowserWindow } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import dotenv from "dotenv";
@@ -8,13 +8,13 @@ import {
   setupWindowControls,
   showWindow,
   setQuitting,
-  cleanupWindow
+  cleanupWindow,
 } from "./window-manager";
 import { createTray, cleanupTray } from "./tray-manager";
 import {
   setupProtocolHandler,
   setupProtocolEvents,
-  checkInitialProtocolUrl
+  checkInitialProtocolUrl,
 } from "./protocol-handler";
 import { setupAuthHandlers } from "./auth-handlers";
 
@@ -23,7 +23,12 @@ dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-console.log("🚀 Electron main process starting...");
+console.log("Electron main process starting...");
+
+// Set app name for Task Manager (development)
+if (process.env.NODE_ENV !== 'production') {
+  app.setName('Sunless');
+}
 
 // Set up app root path
 process.env.APP_ROOT = path.join(__dirname, "..");
@@ -38,7 +43,6 @@ app.on("window-all-closed", () => {
 });
 
 app.on("activate", () => {
-  const { BrowserWindow } = require("electron");
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
@@ -68,7 +72,13 @@ if (!gotTheLock) {
 app.whenReady().then(() => {
   // Set dock/menu bar icon
   if (process.platform === "darwin") {
-    app.dock.setIcon(path.join(process.env.APP_ROOT || path.join(__dirname, ".."), "build", "icon.png"));
+    app.dock.setIcon(
+      path.join(
+        process.env.APP_ROOT || path.join(__dirname, ".."),
+        "build",
+        "icon.png",
+      ),
+    );
   }
 
   createWindow();
