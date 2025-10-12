@@ -65,9 +65,8 @@ export function createTray() {
 
     // Platform-specific click behavior
     if (process.platform === "darwin") {
-      // macOS: single click opens menu (handled by contextMenu)
-      // Can also handle click to show window if desired
-      tray.on("click", showWindow);
+      // macOS: click is handled by contextMenu automatically
+      // No additional click handler needed - menu opens on click
     } else {
       // Windows/Linux: double click to show window
       tray.on("double-click", showWindow);
