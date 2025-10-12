@@ -18,33 +18,27 @@ import {
 } from "./protocol-handler";
 import { setupAuthHandlers } from "./auth-handlers";
 
-// Load environment variables
-dotenv.config();
+dotenv.config({ debug: false, override: false });
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 console.log("Electron main process starting...");
 
-// Set app name for Task Manager (development)
-if (process.env.NODE_ENV !== 'production') {
-  app.setName('Sunless');
-}
-
-// Set up app root path
 process.env.APP_ROOT = path.join(__dirname, "..");
 
 // App lifecycle handlers
 app.on("window-all-closed", () => {
-  // Keep app running in background on all platforms
-  if (process.platform === "darwin") {
-    return; // Standard macOS behavior
-  }
-  // For other platforms, keep running (can be made configurable)
+  // Keep app running in background for system tray (Windows) and menu bar (macOS)
+  // Don't quit the app - user can quit via tray/menu bar menu
 });
 
 app.on("activate", () => {
+  // On macOS, re-create window when dock icon is clicked and no windows are open
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
+  } else {
+    // If window exists but is hidden, show it
+    showWindow();
   }
 });
 
@@ -70,7 +64,7 @@ if (!gotTheLock) {
 
 // App initialization
 app.whenReady().then(() => {
-  // Set dock/menu bar icon
+  // Set dock icon for macOS
   if (process.platform === "darwin") {
     app.dock.setIcon(
       path.join(
@@ -79,10 +73,12 @@ app.whenReady().then(() => {
         "icon.png",
       ),
     );
+    // Keep dock icon visible (can be hidden if you want menu bar only)
+    // app.dock.hide(); // Uncomment to hide dock icon and run as menu bar only app
   }
 
   createWindow();
-  createTray();
+  createTray(); // Creates system tray (Windows) or menu bar icon (macOS)
   setupWindowControls();
   setupAuthHandlers();
 
