@@ -23,11 +23,12 @@ export function createTray() {
     // Create native image and resize for platform-specific requirements
     let icon = nativeImage.createFromPath(iconPath);
 
-    // macOS menu bar icons should be 16x16 or 22x22 with template style
+    // macOS menu bar icons should be 16x16 or 22x22
     if (process.platform === "darwin") {
       icon = icon.resize({ width: 22, height: 22 });
-      // Template images are black and white and adapt to dark/light mode
-      icon.setTemplateImage(true);
+      // Note: template images require monochrome (black/transparent) icons
+      // Disabled for now to use the colored icon
+      // icon.setTemplateImage(true);
     }
 
     tray = new Tray(icon);
