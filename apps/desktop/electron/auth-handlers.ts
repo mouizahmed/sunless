@@ -1,8 +1,8 @@
 import { ipcMain, shell } from "electron";
 import { config } from "./config";
 
-// OAuth state expiration time (10 minutes)
-const OAUTH_STATE_EXPIRATION_MS = 10 * 60 * 1000;
+// OAuth state expiration time (5 minutes)
+const OAUTH_STATE_EXPIRATION_MS = 5 * 60 * 1000;
 
 function generateOAuthState(): string {
   return Math.random().toString(36).substring(2) + Date.now().toString(36);
