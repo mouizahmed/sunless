@@ -1,9 +1,8 @@
-import { app, Notification } from "electron";
+import { app } from "electron";
 import path from "node:path";
 import { getWindow, showWindow } from "./window-manager";
 import { AuthStore } from "./auth-store";
 import { config } from "./config";
-
 
 export function setupProtocolHandler() {
   if (process.defaultApp) {
@@ -46,7 +45,9 @@ export function setupProtocolEvents() {
   });
 
   app.on("ready", () => {
-    const protocolUrl = process.argv.find((arg) => arg.startsWith("sunless://"));
+    const protocolUrl = process.argv.find((arg) =>
+      arg.startsWith("sunless://"),
+    );
     if (protocolUrl) {
       handleProtocolUrl(protocolUrl);
     }
@@ -60,37 +61,45 @@ async function handleProtocolUrl(url: string) {
 
   try {
     const parsed = new URL(url);
-    const isAuthComplete =
-      parsed.pathname === "/auth-complete" ||
-      parsed.pathname === "auth-complete" ||
-      parsed.pathname === "/auth-complete/" ||
-      parsed.hostname === "auth-complete";
 
-    if (isAuthComplete) {
-      const code = parsed.searchParams.get("code") || undefined;
-      showWindow();
-
-      if (code) {
-        await completeAuthenticationWithCode(code);
-      }
-
-      if (Notification.isSupported()) {
-        new Notification({
-          title: "Sunless",
-          body: "Authentication completed! Welcome back.",
-          icon: path.join(process.env.APP_ROOT || path.join(__dirname, ".."), "build", "icon.png"),
-        }).show();
-      }
+    // Handle auth callback - sunless://auth-complete?code=ABC123
+    if (
+      parsed.hostname === "auth-complete" ||
+      parsed.pathname.replace(/^\/|\/$/g, "") === "auth-complete"
+    ) {
+      await handleAuthComplete(parsed);
     }
+    // Future: Add more protocol handlers here
   } catch (error) {
     console.error("Error parsing protocol URL:", error);
   }
 }
 
+async function handleAuthComplete(parsed: URL) {
+  const code = parsed.searchParams.get("code") || undefined;
+  showWindow();
+
+  if (code) {
+    await completeAuthenticationWithCode(code);
+  }
+
+  // if (Notification.isSupported()) {
+  //   new Notification({
+  //     title: "Sunless",
+  //     body: "Authentication completed! Welcome back.",
+  //     icon: path.join(
+  //       process.env.APP_ROOT || path.join(__dirname, ".."),
+  //       "build",
+  //       "icon.png",
+  //     ),
+  //   }).show();
+  // }
+}
+
 function validateOAuthCode(code: string): boolean {
   // OAuth codes should be alphanumeric with possible hyphens/underscores
   // Typically 20-128 characters long
-  if (typeof code !== 'string') return false;
+  if (typeof code !== "string") return false;
   if (code.length < 10 || code.length > 256) return false;
   if (!/^[a-zA-Z0-9\-_]+$/.test(code)) return false;
   return true;
@@ -98,7 +107,7 @@ function validateOAuthCode(code: string): boolean {
 
 async function completeAuthenticationWithCode(code: string): Promise<void> {
   if (!code || !validateOAuthCode(code)) {
-    console.warn('Invalid OAuth code format detected');
+    console.warn("Invalid OAuth code format detected");
     return;
   }
 
@@ -147,7 +156,8 @@ async function completeAuthenticationWithCode(code: string): Promise<void> {
       if (win && !win.isDestroyed()) {
         win.webContents.send("auth-session-updated", {
           success: false,
-          error: authResult.error || "Authentication was not completed successfully",
+          error:
+            authResult.error || "Authentication was not completed successfully",
           timestamp: new Date().toISOString(),
         });
       }
@@ -165,7 +175,9 @@ async function completeAuthenticationWithCode(code: string): Promise<void> {
 }
 
 export function checkInitialProtocolUrl() {
-  const initialProtocolUrl = process.argv.find((arg) => arg.startsWith("sunless://"));
+  const initialProtocolUrl = process.argv.find((arg) =>
+    arg.startsWith("sunless://"),
+  );
   if (initialProtocolUrl) {
     setTimeout(() => handleProtocolUrl(initialProtocolUrl), 1000);
   }

@@ -26,7 +26,6 @@ console.log("Electron main process starting...");
 
 process.env.APP_ROOT = path.join(__dirname, "..");
 
-// App lifecycle handlers
 app.on("window-all-closed", () => {
   // Keep app running in background for system tray (Windows) and menu bar (macOS)
   // Don't quit the app - user can quit via tray/menu bar menu
