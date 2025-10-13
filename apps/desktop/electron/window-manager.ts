@@ -17,10 +17,13 @@ export const RENDERER_DIST = path.join(
 let win: BrowserWindow | null;
 let isQuitting = false;
 
+const TITLE_BAR_HEIGHT = 48;
+const TITLE_BAR_BACKGROUND = "#ffffff00"; // Transparent
+
 function getTitleBarColors() {
   const isDarkMode = nativeTheme.shouldUseDarkColors;
   return {
-    backgroundColor: "#ffffff00", // Always transparent
+    backgroundColor: TITLE_BAR_BACKGROUND,
     symbolColor: isDarkMode ? "#ffffff" : "#000000", // White in dark, black in light
   };
 }
@@ -31,7 +34,7 @@ function updateTitleBarColors() {
     win.setTitleBarOverlay({
       color: titleBarColors.backgroundColor,
       symbolColor: titleBarColors.symbolColor,
-      height: 48,
+      height: TITLE_BAR_HEIGHT,
     });
   }
 }
@@ -54,7 +57,7 @@ export function createWindow() {
     titleBarOverlay: {
       color: titleBarColors.backgroundColor,
       symbolColor: titleBarColors.symbolColor,
-      height: 44,
+      height: TITLE_BAR_HEIGHT,
     },
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
