@@ -5,7 +5,7 @@ import { showWindow, restartApp, setQuitting } from "./window-manager";
 let tray: Tray | null;
 
 const getAppName = () => app.getName() || "Sunless";
-const getAppVersion = () => `v${app.getVersion()}` || "v1.0.0";
+const getAppVersion = () => `v${app.getVersion()}`;
 
 export function createTray() {
   let iconPath;
@@ -23,12 +23,16 @@ export function createTray() {
     // Create native image and resize for platform-specific requirements
     let icon = nativeImage.createFromPath(iconPath);
 
-    // macOS menu bar icons should be 16x16 or 22x22
+    // Platform-specific icon sizing
     if (process.platform === "darwin") {
+      // macOS menu bar icons should be 16x16 or 22x22
       icon = icon.resize({ width: 22, height: 22 });
       // Note: template images require monochrome (black/transparent) icons
       // Disabled for now to use the colored icon
       // icon.setTemplateImage(true);
+    } else if (process.platform === "win32") {
+      // Windows tray icons should be 16x16 or 32x32
+      icon = icon.resize({ width: 16, height: 16 });
     }
 
     tray = new Tray(icon);
@@ -64,12 +68,8 @@ export function createTray() {
 
     tray.setContextMenu(contextMenu);
 
-    // Platform-specific click behavior
-    if (process.platform === "darwin") {
-      // macOS: click is handled by contextMenu automatically
-      // No additional click handler needed - menu opens on click
-    } else {
-      // Windows/Linux: double click to show window
+    // Windows/Linux: double click to show window (macOS handles clicks automatically)
+    if (process.platform !== "darwin") {
       tray.on("double-click", showWindow);
     }
   } catch (error) {
