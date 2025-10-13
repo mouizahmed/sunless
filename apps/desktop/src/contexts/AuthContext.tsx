@@ -1,6 +1,17 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useRef,
+  ReactNode,
+} from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { auth, onAuthStateChanged, signInWithCustomToken } from "@/config/firebase";
+import {
+  auth,
+  onAuthStateChanged,
+  signInWithCustomToken,
+} from "@/config/firebase";
 import { webSocketManager } from "@/utils/websocket";
 
 interface User {
@@ -32,25 +43,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const [loginLoading, setLoginLoading] = useState(false);
-  const [loginProvider, setLoginProvider] = useState<"google" | "microsoft" | null>(null);
+  const [loginProvider, setLoginProvider] = useState<
+    "google" | "microsoft" | null
+  >(null);
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Store auth timeout ID
+  const authTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Auth session listener
   useEffect(() => {
     // Listen for auth session updates from main process
     const removeListener = window.electronAPI.onAuthSessionUpdated(
       (_event, data) => {
-        console.log("🔔 Received auth session update:", data);
+        console.log("Received auth session update:", data);
 
-        if (data.success && data.firebaseToken) {
-          console.log("✅ Session updated with Firebase token");
+        // Clear auth timeout if it exists
+        if (authTimeoutRef.current) {
+          clearTimeout(authTimeoutRef.current);
+          authTimeoutRef.current = null;
+        }
+
+        if (data.success) {
+          console.log("Session updated with Firebase token");
 
           signInWithCustomToken(auth, data.firebaseToken)
             .then((cred) => {
-              console.log("🔥 Signed into Firebase with custom token!");
+              console.log("Signed into Firebase with custom token!");
               if (cred.user) {
                 cred.user.getIdToken().then((idToken) => {
-                  console.log("🔑 Firebase ID token for API calls:", idToken);
+                  console.log("Firebase ID token for API calls:", idToken);
                 });
               }
               setLoginLoading(false);
@@ -58,20 +81,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               setAuthError(null);
             })
             .catch((firebaseError) => {
-              console.error("❌ Firebase sign-in failed:", firebaseError);
+              console.error("Firebase sign-in failed:", firebaseError);
               setLoginLoading(false);
               setLoginProvider(null);
               setAuthError("Firebase authentication failed");
             });
-        } else if (!data.success && data.error) {
-          console.error("❌ Auth session update failed:", data.error);
+        } else {
+          console.error("Auth session update failed:", data.error);
           setLoginLoading(false);
           setLoginProvider(null);
-          setAuthError(data.error || "Authentication failed");
+          setAuthError(data.error);
         }
       },
     );
 
+    return () => {
+      // Clear auth timeout on unmount if it exists
+      if (authTimeoutRef.current) {
+        clearTimeout(authTimeoutRef.current);
+        authTimeoutRef.current = null;
+      }
+      removeListener();
+    };
+  }, []);
+
+  // Firebase auth state listener
+  useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
         setUser({
@@ -83,30 +118,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Initialize WebSocket connection when user is authenticated
         webSocketManager.initialize();
-
-        // Redirect authenticated users to dashboard
-        if (location.pathname === "/" || location.pathname === "/welcome") {
-          navigate("/dashboard", { replace: true });
-        }
       } else {
         setUser(null);
 
         // Disconnect WebSocket when user logs out
         webSocketManager.disconnect();
-
-        // Redirect unauthenticated users to welcome page
-        if (location.pathname === "/" || location.pathname === "/dashboard") {
-          navigate("/welcome", { replace: true });
-        }
       }
       setIsLoading(false);
     });
 
     return () => {
       unsubscribe();
-      removeListener();
     };
-  }, [navigate, location.pathname]);
+  }, []);
+
+  // Handle navigation based on auth state
+  useEffect(() => {
+    if (isLoading) return; // Wait for auth to initialize
+
+    if (user) {
+      // Redirect authenticated users to dashboard
+      if (location.pathname === "/" || location.pathname === "/welcome") {
+        navigate("/dashboard", { replace: true });
+      }
+    } else {
+      // Redirect unauthenticated users to welcome page
+      if (location.pathname === "/" || location.pathname === "/dashboard") {
+        navigate("/welcome", { replace: true });
+      }
+    }
+  }, [user, isLoading, location.pathname, navigate]);
 
   const logout = async () => {
     try {
@@ -121,98 +162,111 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logoutEverywhere = async () => {
     try {
-      const { callBackendLogout } = await import("@/utils/firebase-api");
-
       webSocketManager.disconnect();
-      const baseUrl = (window as unknown as { BACKEND_URL?: string }).BACKEND_URL || "http://localhost:8080";
-      await callBackendLogout(baseUrl);
+
+      // Get Firebase ID token
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) {
+        throw new Error("No authentication token available");
+      }
+
+      // Call main process to logout from backend
+      const result = await window.electronAPI.logoutEverywhere(idToken);
+      if (!result.success) {
+        throw new Error(result.error || "Backend logout failed");
+      }
+
+      // Sign out from Firebase
       await auth.signOut();
-      await window.electronAPI.logout();
+
       setUser(null);
     } catch (error) {
       console.error("Global logout error:", error);
+      // Even if backend logout fails, still sign out locally
+      await auth.signOut();
+      setUser(null);
     }
   };
 
-  const loginWithGoogle = async () => {
+  const handleOAuthLogin = async (
+    provider: "google" | "microsoft",
+    authFn: () => Promise<AuthResult>,
+  ) => {
+    // Clear any existing timeout before starting new auth flow
+    if (authTimeoutRef.current) {
+      clearTimeout(authTimeoutRef.current);
+      authTimeoutRef.current = null;
+    }
+
     setLoginLoading(true);
-    setLoginProvider("google");
+    setLoginProvider(provider);
     setAuthError(null);
 
     try {
-      console.log("Starting Google OAuth via system browser...");
-      const result = await window.electronAPI.authenticateWithGoogle();
+      console.log(`Starting ${provider} OAuth via system browser...`);
+      const result = await authFn();
 
-      if (result.success && result.token) {
-        try {
-          const authData = JSON.parse(result.token);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
 
-          if (authData.status === "pending") {
-            console.log("✅ Google OAuth flow started!");
-            console.log(`🔗 Session ID: ${authData.sessionId}`);
-            console.log("⏳ Waiting for completion in browser...");
-            // Keep loading state for pending authentication
-            // The session will be updated via the auth-session-updated event
-          } else {
-            console.log("Received legacy auth format - handling directly");
-            throw new Error("Please use the updated authentication flow");
-          }
-        } catch (parseError) {
-          console.error("Failed to parse auth response:", parseError);
-          throw new Error("Authentication response format unexpected");
+      if (!result.token) {
+        throw new Error("Authentication failed - no token received");
+      }
+
+      try {
+        const authData = JSON.parse(result.token);
+
+        if (authData.status === "pending") {
+          console.log(`✅ ${provider} OAuth flow started!`);
+          console.log("⏳ Waiting for completion in browser...");
+
+          // Set timeout to clear loading state if auth takes too long (5 minutes)
+          authTimeoutRef.current = setTimeout(() => {
+            setLoginLoading(false);
+            setLoginProvider(null);
+            setAuthError("Authentication timed out. Please try again.");
+          }, 5 * 60 * 1000);
+        } else {
+          console.log("Received legacy auth format - handling directly");
+          throw new Error("Please use the updated authentication flow");
         }
-      } else {
-        throw new Error(result.error || "Authentication failed");
+      } catch (parseError) {
+        console.error("Failed to parse auth response:", parseError);
+        throw new Error("Authentication response format unexpected");
       }
     } catch (error: unknown) {
-      console.error("Google authentication error:", error);
-      const errorMessage = error instanceof Error ? error.message : "Authentication failed. Please try again.";
+      console.error(`${provider} authentication error:`, error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Authentication failed. Please try again.";
+
+      // Clear timeout on error
+      if (authTimeoutRef.current) {
+        clearTimeout(authTimeoutRef.current);
+        authTimeoutRef.current = null;
+      }
+
       setLoginLoading(false);
       setLoginProvider(null);
       setAuthError(errorMessage);
     }
   };
 
-  const loginWithMicrosoft = async () => {
-    setLoginLoading(true);
-    setLoginProvider("microsoft");
-    setAuthError(null);
+  const loginWithGoogle = () =>
+    handleOAuthLogin("google", window.electronAPI.authenticateWithGoogle);
 
-    try {
-      console.log("Starting Microsoft OAuth via system browser...");
-      const result = await window.electronAPI.authenticateWithMicrosoft();
-
-      if (result.success && result.token) {
-        try {
-          const authData = JSON.parse(result.token);
-
-          if (authData.status === "pending") {
-            console.log("✅ Microsoft OAuth flow started!");
-            console.log(`🔗 Session ID: ${authData.sessionId}`);
-            console.log("⏳ Waiting for completion in browser...");
-            // Keep loading state for pending authentication
-            // The session will be updated via the auth-session-updated event
-          } else {
-            console.log("Received legacy auth format - handling directly");
-            throw new Error("Please use the updated authentication flow");
-          }
-        } catch (parseError) {
-          console.error("Failed to parse auth response:", parseError);
-          throw new Error("Authentication response format unexpected");
-        }
-      } else {
-        throw new Error(result.error || "Authentication failed");
-      }
-    } catch (error: unknown) {
-      console.error("Microsoft authentication error:", error);
-      const errorMessage = error instanceof Error ? error.message : "Authentication failed. Please try again.";
-      setLoginLoading(false);
-      setLoginProvider(null);
-      setAuthError(errorMessage);
-    }
-  };
+  const loginWithMicrosoft = () =>
+    handleOAuthLogin("microsoft", window.electronAPI.authenticateWithMicrosoft);
 
   const cancelAuth = () => {
+    // Clear auth timeout if it exists
+    if (authTimeoutRef.current) {
+      clearTimeout(authTimeoutRef.current);
+      authTimeoutRef.current = null;
+    }
+
     setLoginLoading(false);
     setLoginProvider(null);
     setAuthError(null);
@@ -220,25 +274,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{
-      user,
-      isAuthenticated: !!user,
-      isLoading,
-      authError,
-      loginLoading,
-      loginProvider,
-      setUser,
-      logout,
-      logoutEverywhere,
-      loginWithGoogle,
-      loginWithMicrosoft,
-      cancelAuth
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        isAuthenticated: !!user,
+        isLoading,
+        authError,
+        loginLoading,
+        loginProvider,
+        setUser,
+        logout,
+        logoutEverywhere,
+        loginWithGoogle,
+        loginWithMicrosoft,
+        cancelAuth,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 }
 
+/* eslint-disable react-refresh/only-export-components */
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {

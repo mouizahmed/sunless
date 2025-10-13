@@ -8,30 +8,15 @@ import {
   WorkspaceContext,
 } from "./WorkspaceTypes";
 import { CriticalError } from "../components/CriticalError";
+import { makeAuthenticatedApiCall } from "../utils/firebase-api";
 
-// API helper functions
-const getAuthHeaders = async () => {
-  const { getFirebaseIdToken } = await import("../utils/firebase-api");
-  const token = await getFirebaseIdToken();
-  return {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${token}`,
-  };
-};
-
+// API helper function
 const makeApiRequest = async (url: string, options: RequestInit = {}) => {
   const baseUrl =
     (window as unknown as { BACKEND_URL?: string }).BACKEND_URL ||
     "http://localhost:8080";
-  const headers = await getAuthHeaders();
 
-  const response = await fetch(`${baseUrl}/api${url}`, {
-    ...options,
-    headers: {
-      ...headers,
-      ...options.headers,
-    },
-  });
+  const response = await makeAuthenticatedApiCall(`${baseUrl}/api${url}`, options);
 
   if (!response.ok) {
     const errorData: { error?: string } = await response.json().catch(() => ({}));

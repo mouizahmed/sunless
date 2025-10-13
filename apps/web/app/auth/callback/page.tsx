@@ -12,6 +12,7 @@ function AuthCallbackContent() {
   useEffect(() => {
     const error = searchParams.get("error");
     const code = searchParams.get("code");
+    const state = searchParams.get("state");
 
     if (error) {
       console.log("❌ OAuth error:", error);
@@ -24,10 +25,11 @@ function AuthCallbackContent() {
     }
 
     console.log("🔑 Code received:", code);
+    console.log("🔑 State received:", state);
 
     // Try to open desktop app
     try {
-      const protocolUrl = `sunless://auth-complete?code=${code}`;
+      const protocolUrl = `sunless://auth-complete?code=${code}&state=${state}`;
       console.log("🔗 Opening app with:", protocolUrl);
 
       // Set location to trigger protocol
@@ -46,8 +48,9 @@ function AuthCallbackContent() {
 
   const handleManualOpen = () => {
     const code = searchParams.get("code");
+    const state = searchParams.get("state");
     if (code) {
-      window.location.href = `sunless://auth-complete?code=${code}`;
+      window.location.href = `sunless://auth-complete?code=${code}&state=${state}`;
     }
   };
 

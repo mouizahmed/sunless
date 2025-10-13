@@ -1,8 +1,25 @@
 import { app } from "electron";
 import path from "node:path";
 import { getWindow, showWindow } from "./window-manager";
-import { AuthStore } from "./auth-store";
 import { config } from "./config";
+import { validateState } from "./auth-handlers";
+
+// Helper to send auth session updates to renderer
+function sendAuthUpdate(
+  success: boolean,
+  data: { firebaseToken?: string; error?: string },
+) {
+  const win = getWindow();
+  if (win && !win.isDestroyed()) {
+    win.webContents.send("auth-session-updated", {
+      success,
+      ...(success
+        ? { firebaseToken: data.firebaseToken }
+        : { error: data.error }),
+      timestamp: new Date().toISOString(),
+    });
+  }
+}
 
 export function setupProtocolHandler() {
   if (process.defaultApp) {
@@ -62,7 +79,7 @@ async function handleProtocolUrl(url: string) {
   try {
     const parsed = new URL(url);
 
-    // Handle auth callback - sunless://auth-complete?code=ABC123
+    // Handle auth callback
     if (
       parsed.hostname === "auth-complete" ||
       parsed.pathname.replace(/^\/|\/$/g, "") === "auth-complete"
@@ -76,24 +93,29 @@ async function handleProtocolUrl(url: string) {
 }
 
 async function handleAuthComplete(parsed: URL) {
-  const code = parsed.searchParams.get("code") || undefined;
+  const code = parsed.searchParams.get("code");
+  const state = parsed.searchParams.get("state");
+
   showWindow();
 
-  if (code) {
-    await completeAuthenticationWithCode(code);
+  // Validate state for CSRF protection (OAuth 2.0 standard)
+  // The state parameter ensures the callback is for a request we initiated
+  if (!state || !validateState(state)) {
+    console.error("Invalid or missing OAuth state parameter");
+    sendAuthUpdate(false, {
+      error: "Authentication failed: Invalid session state",
+    });
+    return;
   }
 
-  // if (Notification.isSupported()) {
-  //   new Notification({
-  //     title: "Sunless",
-  //     body: "Authentication completed! Welcome back.",
-  //     icon: path.join(
-  //       process.env.APP_ROOT || path.join(__dirname, ".."),
-  //       "build",
-  //       "icon.png",
-  //     ),
-  //   }).show();
-  // }
+  if (!code) {
+    sendAuthUpdate(false, {
+      error: "Authentication failed: No authorization code received",
+    });
+    return;
+  }
+
+  await completeAuthenticationWithCode(code);
 }
 
 function validateOAuthCode(code: string): boolean {
@@ -108,6 +130,9 @@ function validateOAuthCode(code: string): boolean {
 async function completeAuthenticationWithCode(code: string): Promise<void> {
   if (!code || !validateOAuthCode(code)) {
     console.warn("Invalid OAuth code format detected");
+    sendAuthUpdate(false, {
+      error: "Authentication failed: Invalid authorization code format",
+    });
     return;
   }
 
@@ -118,16 +143,11 @@ async function completeAuthenticationWithCode(code: string): Promise<void> {
       body: JSON.stringify({ code }),
     });
 
-    const win = getWindow();
     if (!response.ok) {
       const responseText = await response.text();
-      if (win && !win.isDestroyed()) {
-        win.webContents.send("auth-session-updated", {
-          success: false,
-          error: `Authentication failed (${response.status}): ${responseText}`,
-          timestamp: new Date().toISOString(),
-        });
-      }
+      sendAuthUpdate(false, {
+        error: `Authentication failed (${response.status}): ${responseText}`,
+      });
       return;
     }
 
@@ -135,42 +155,22 @@ async function completeAuthenticationWithCode(code: string): Promise<void> {
 
     if (authResult.status === "success" && authResult.user) {
       if (authResult.firebaseToken) {
-        AuthStore.setAuthState(true);
-        if (win && !win.isDestroyed()) {
-          win.webContents.send("auth-session-updated", {
-            success: true,
-            firebaseToken: authResult.firebaseToken,
-            timestamp: new Date().toISOString(),
-          });
-        }
+        sendAuthUpdate(true, { firebaseToken: authResult.firebaseToken });
       } else {
-        if (win && !win.isDestroyed()) {
-          win.webContents.send("auth-session-updated", {
-            success: false,
-            error: "Authentication completed but no token received",
-            timestamp: new Date().toISOString(),
-          });
-        }
-      }
-    } else {
-      if (win && !win.isDestroyed()) {
-        win.webContents.send("auth-session-updated", {
-          success: false,
-          error:
-            authResult.error || "Authentication was not completed successfully",
-          timestamp: new Date().toISOString(),
+        sendAuthUpdate(false, {
+          error: "Authentication completed but no token received",
         });
       }
-    }
-  } catch (error) {
-    const win = getWindow();
-    if (win && !win.isDestroyed()) {
-      win.webContents.send("auth-session-updated", {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-        timestamp: new Date().toISOString(),
+    } else {
+      sendAuthUpdate(false, {
+        error:
+          authResult.error || "Authentication was not completed successfully",
       });
     }
+  } catch (error) {
+    sendAuthUpdate(false, {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 

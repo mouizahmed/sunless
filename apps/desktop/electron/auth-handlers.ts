@@ -1,46 +1,43 @@
 import { ipcMain, shell } from "electron";
-import { AuthStore } from "./auth-store";
-import { getWindow } from "./window-manager";
 import { config } from "./config";
 
-const OAUTH_PROVIDERS = {
-  google: {
-    providerId: "google.com",
-    scopes: ["openid", "email", "profile"],
-  },
-  microsoft: {
-    providerId: "microsoft.com",
-    scopes: ["openid", "email", "profile"],
-  },
-};
-
+// OAuth state expiration time (10 minutes)
+const OAUTH_STATE_EXPIRATION_MS = 10 * 60 * 1000;
 
 function generateOAuthState(): string {
   return Math.random().toString(36).substring(2) + Date.now().toString(36);
 }
 
-const pendingStates = new Map<string, { timestamp: number; provider: string }>();
+const pendingStates = new Map<string, number>(); // Maps state -> timestamp
 
-async function storeTemporaryState(state: string, provider: string): Promise<void> {
-  // Clean up expired states (older than 10 minutes)
+// Periodic cleanup of expired states (runs every 5 minutes)
+setInterval(() => {
   const now = Date.now();
-  for (const [key, value] of pendingStates.entries()) {
-    if (now - value.timestamp > 10 * 60 * 1000) {
+  for (const [key, timestamp] of pendingStates.entries()) {
+    if (now - timestamp > OAUTH_STATE_EXPIRATION_MS) {
       pendingStates.delete(key);
     }
   }
+}, 5 * 60 * 1000);
 
-  pendingStates.set(state, { timestamp: now, provider });
+function storeTemporaryState(state: string): void {
+  pendingStates.set(state, Date.now());
 }
 
+// Validates OAuth state parameter for CSRF protection
 export function validateState(state: string): boolean {
-  if (!state || typeof state !== 'string') return false;
+  if (!state || typeof state !== "string") {
+    return false;
+  }
 
-  const stateData = pendingStates.get(state);
-  if (!stateData) return false;
+  const timestamp = pendingStates.get(state);
+  if (!timestamp) {
+    return false;
+  }
 
-  // Check if state is expired (10 minutes)
-  if (Date.now() - stateData.timestamp > 10 * 60 * 1000) {
+  // Check if state is expired
+  const age = Date.now() - timestamp;
+  if (age > OAUTH_STATE_EXPIRATION_MS) {
     pendingStates.delete(state);
     return false;
   }
@@ -50,48 +47,22 @@ export function validateState(state: string): boolean {
   return true;
 }
 
-async function handleOAuth(provider: keyof typeof OAUTH_PROVIDERS): Promise<string> {
+async function handleOAuth(provider: "google" | "microsoft"): Promise<string> {
   try {
     const state = generateOAuthState();
-    await storeTemporaryState(state, provider);
+    storeTemporaryState(state);
 
     const authUrl = `${config.backendUrl}/auth/start?provider=${provider}&state=${state}&platform=desktop`;
-
-    console.log(`🔗 Generated auth URL: ${authUrl}`);
-    console.log(`🌐 Backend URL from config: ${config.backendUrl}`);
-    console.log(`🔧 Config object:`, config);
-
-    // Validate URL before opening
-    try {
-      const parsed = new URL(authUrl);
-      console.log(`✅ URL validation passed: ${parsed.toString()}`);
-    } catch (error) {
-      console.error(`❌ URL validation failed:`, error);
-      throw new Error('Invalid authentication URL generated');
-    }
-
-    console.log(`🚀 Attempting to open URL in browser using shell.openExternal...`);
-
-    try {
-      await shell.openExternal(authUrl);
-      console.log(`✅ Successfully opened browser for ${provider} authentication`);
-    } catch (error) {
-      console.error(`❌ shell.openExternal failed:`, error);
-      throw new Error('Failed to open authentication URL in browser');
-    }
+    await shell.openExternal(authUrl);
 
     return JSON.stringify({
       status: "pending",
-      state,
-      message: "Authentication started - waiting for browser completion",
-      timestamp: new Date().toISOString(),
     });
   } catch (error) {
     console.error(`${provider} OAuth error:`, error);
     throw error;
   }
 }
-
 
 export function setupAuthHandlers() {
   // OAuth handlers
@@ -100,7 +71,8 @@ export function setupAuthHandlers() {
       const token = await handleOAuth("google");
       return { success: true, token };
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       return { success: false, error: errorMessage };
     }
   });
@@ -110,38 +82,41 @@ export function setupAuthHandlers() {
       const token = await handleOAuth("microsoft");
       return { success: true, token };
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       return { success: false, error: errorMessage };
     }
   });
 
-  // Logout handler
+  // Logout handler - main process cleanup
+  // Note: Firebase handles session persistence, so no main process state to clear
   ipcMain.handle("auth:logout", async () => {
+    return { success: true };
+  });
+
+  // Logout everywhere handler
+  ipcMain.handle("auth:logout-everywhere", async (_event, idToken: string) => {
     try {
-      const win = getWindow();
-      if (win && !win.isDestroyed()) {
-        await win.webContents.executeJavaScript(
-          `window.__sunlessBackendLogout && window.__sunlessBackendLogout()`,
+      const response = await fetch(`${config.backendUrl}/auth/logout`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `Backend logout failed: ${response.status} ${errorText}`,
         );
       }
 
-      AuthStore.clearAuth();
       return { success: true };
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       return { success: false, error: errorMessage };
     }
   });
-
-  // Set auth state
-  ipcMain.handle("auth:set-state", async (_event, isAuthenticated: boolean) => {
-    try {
-      AuthStore.setAuthState(isAuthenticated);
-      return { success: true };
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      return { success: false, error: errorMessage };
-    }
-  });
-
 }

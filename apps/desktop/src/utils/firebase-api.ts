@@ -7,16 +7,16 @@ import { auth } from "@/config/firebase";
 export async function getFirebaseIdToken(): Promise<string | null> {
   try {
     if (!auth.currentUser) {
-      console.log("❌ No authenticated user found");
+      console.log("No authenticated user found");
       return null;
     }
 
     // Get a fresh ID token (Firebase SDK handles refresh automatically)
     const idToken = await auth.currentUser.getIdToken();
-    console.log("🔑 Retrieved fresh Firebase ID token for API call");
+    console.log("Retrieved fresh Firebase ID token for API call");
     return idToken;
   } catch (error) {
-    console.error("❌ Failed to get Firebase ID token:", error);
+    console.error("Failed to get Firebase ID token:", error);
     return null;
   }
 }
@@ -44,26 +44,4 @@ export async function makeAuthenticatedApiCall(
     ...options,
     headers,
   });
-}
-
-/**
- * Call backend logout (global revocation) with current ID token
- */
-export async function callBackendLogout(baseUrl: string): Promise<boolean> {
-  try {
-    const response = await makeAuthenticatedApiCall(
-      `${baseUrl.replace(/\/$/, "")}/api/auth/logout`,
-      { method: "POST" },
-    );
-    if (!response.ok) {
-      const text = await response.text();
-      console.error("❌ Backend logout failed:", response.status, text);
-      return false;
-    }
-    console.log("✅ Backend logout successful (tokens revoked)");
-    return true;
-  } catch (err) {
-    console.error("❌ Backend logout error:", err);
-    return false;
-  }
 }

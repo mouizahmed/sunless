@@ -1,42 +1,35 @@
-// OAuth Authentication Result
-interface AuthResult {
-  success: boolean;
-  token?: string;
-  error?: string;
-  isLoggedIn?: boolean;
-  user?: {
-    id: string;
-    email: string;
-    name: string;
-    picture?: string;
-  };
-  firebaseToken?: string;
-  lastLoginTime?: string;
-}
-
-// IPC Event type for Electron renderer
-interface IpcRendererEvent {
-  preventDefault(): void;
-  sender: {
-    send(channel: string, ...args: unknown[]): void;
-  };
-}
-
-// Session update event data
-interface AuthSessionUpdateEvent {
-  success: boolean;
-  user?: {
-    id: string;
-    email: string;
-    name: string;
-    picture?: string;
-  };
-  firebaseToken?: string;
-  error?: string;
-  timestamp: string;
-}
-
 declare global {
+  // Authentication Result - using discriminated union for type safety
+  type AuthResult =
+    | {
+        success: true;
+        token?: string; // Present for OAuth flows, absent for logout
+      }
+    | {
+        success: false;
+        error: string;
+      };
+
+  // IPC Event type for Electron renderer
+  interface IpcRendererEvent {
+    preventDefault(): void;
+    sender: {
+      send(channel: string, ...args: unknown[]): void;
+    };
+  }
+
+  // Session update event data - using discriminated union for type safety
+  type AuthSessionUpdateEvent =
+    | {
+        success: true;
+        firebaseToken: string;
+        timestamp: string;
+      }
+    | {
+        success: false;
+        error: string;
+        timestamp: string;
+      };
   interface Window {
     electronAPI: {
       minimize: () => Promise<void>;
@@ -49,25 +42,18 @@ declare global {
 
       // Session Management
       logout: () => Promise<AuthResult>;
-      setAuthState: (isAuthenticated: boolean) => Promise<AuthResult>;
+      logoutEverywhere: (idToken: string) => Promise<AuthResult>;
 
       // Event listeners
       onAuthSessionUpdated: (
-        callback: (event: any, data: AuthSessionUpdateEvent) => void,
+        callback: (
+          event: IpcRendererEvent,
+          data: AuthSessionUpdateEvent,
+        ) => void,
       ) => () => void;
     };
     env: {
       platform: NodeJS.Platform;
-    };
-    // IPC Renderer (existing)
-    ipcRenderer: {
-      on: (
-        channel: string,
-        listener: (event: IpcRendererEvent, ...args: unknown[]) => void,
-      ) => void;
-      off: (channel: string, ...args: unknown[]) => void;
-      send: (channel: string, ...args: unknown[]) => void;
-      invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
     };
   }
 }

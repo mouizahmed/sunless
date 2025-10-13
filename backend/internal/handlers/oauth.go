@@ -122,7 +122,8 @@ func (h *OAuthHandler) StartOAuth(c *gin.Context) {
 
 	log.Printf("🚀 Started OAuth flow: %s (provider: %s, platform: %s)", state, provider, platform)
 
-	// Persist OAuth state in Redis for verification during callback (short TTL)
+	// Store platform metadata in Redis for callback routing (NOT for state validation)
+	// State validation is done client-side; this is just for determining callback URL
 	// Key: oauth_state:{state} → JSON { platform, ip, created_at }
 	{
 		ctx := context.Background()
@@ -134,7 +135,7 @@ func (h *OAuthHandler) StartOAuth(c *gin.Context) {
 		})
 		if err := h.redisClient.SetEx(ctx, key, payload, 10*time.Minute).Err(); err != nil {
 			// Non-fatal: log and proceed to avoid blocking auth on transient Redis issues
-			log.Printf("⚠️ failed to record oauth state in redis: %v", err)
+			log.Printf("⚠️ Failed to store platform metadata in Redis: %v", err)
 		}
 	}
 
@@ -163,7 +164,7 @@ func (h *OAuthHandler) StartOAuth(c *gin.Context) {
 func (h *OAuthHandler) HandleCallback(c *gin.Context) {
 	provider := c.Param("provider")
 	code := c.Query("code")
-	state := c.Query("state") // This is our session ID
+	state := c.Query("state")
 	errorParam := c.Query("error")
 
 	// Check for OAuth errors
@@ -189,29 +190,24 @@ func (h *OAuthHandler) HandleCallback(c *gin.Context) {
 		return
 	}
 
-	// Verify and consume the OAuth state (CSRF protection, one-time use)
+	// Retrieve platform from Redis (for routing to correct callback URL)
+	// Note: State validation is done client-side (desktop app), not here
+	// We only use Redis to determine the callback platform (desktop vs web)
 	var callbackPlatform string
 	{
 		ctx := context.Background()
 		key := fmt.Sprintf("oauth_state:%s", state)
 		res := h.redisClient.GetDel(ctx, key)
-		if err := res.Err(); err != nil {
-			if err == redis.Nil {
-				log.Printf("❌ invalid or expired oauth state: %s", state)
-				h.redirectToFrontendWithError(c, "invalid_request", "invalid or expired state")
-				return
-			}
-			log.Printf("❌ redis error verifying oauth state: %v", err)
-			h.redirectToFrontendWithError(c, "server_error", "failed to verify state")
-			return
-		}
-		if val := res.Val(); val != "" {
+		if err := res.Err(); err == nil && res.Val() != "" {
 			var meta struct {
 				Platform string `json:"platform"`
 			}
-			if err := json.Unmarshal([]byte(val), &meta); err == nil {
+			if err := json.Unmarshal([]byte(res.Val()), &meta); err == nil {
 				callbackPlatform = meta.Platform
 			}
+		} else {
+			// Redis lookup failed or expired - default to desktop
+			callbackPlatform = "desktop"
 		}
 	}
 
@@ -228,13 +224,13 @@ func (h *OAuthHandler) HandleCallback(c *gin.Context) {
 	default:
 		errorMsg := "Unsupported provider"
 		log.Printf("❌ %s", errorMsg)
-		h.redirectToFrontendWithError(c, "invalid_request", errorMsg)
+		h.redirectToFrontendWithError(c, "invalid_request", errorMsg, callbackPlatform)
 		return
 	}
 
 	if err != nil {
 		log.Printf("❌ Failed to get user info from %s: %v", provider, err)
-		h.redirectToFrontendWithError(c, "server_error", fmt.Sprintf("Failed to authenticate with %s: %v", provider, err))
+		h.redirectToFrontendWithError(c, "server_error", fmt.Sprintf("Failed to authenticate with %s: %v", provider, err), callbackPlatform)
 		return
 	}
 
@@ -242,7 +238,7 @@ func (h *OAuthHandler) HandleCallback(c *gin.Context) {
 	actualUserID, err := h.createOrUpdateUser(user)
 	if err != nil {
 		log.Printf("❌ Failed to create/update user: %v", err)
-		h.redirectToFrontendWithError(c, "server_error", "Failed to create user account")
+		h.redirectToFrontendWithError(c, "server_error", "Failed to create user account", callbackPlatform)
 		return
 	}
 
@@ -250,7 +246,7 @@ func (h *OAuthHandler) HandleCallback(c *gin.Context) {
 	firebaseToken, err := h.firebaseClient.CreateCustomToken(actualUserID, nil)
 	if err != nil {
 		log.Printf("❌ Failed to create Firebase token: %v", err)
-		h.redirectToFrontendWithError(c, "server_error", "Failed to create authentication token")
+		h.redirectToFrontendWithError(c, "server_error", "Failed to create authentication token", callbackPlatform)
 		return
 	}
 
@@ -278,23 +274,28 @@ func (h *OAuthHandler) HandleCallback(c *gin.Context) {
 	log.Printf("✅ OAuth completed successfully for user: %s (%s)", user.Name, user.Email)
 	log.Printf("🔑 Generated one-time code: %s", oneTimeCode)
 
-	// Redirect to frontend callback with one-time code
-	frontendCallbackURL := os.Getenv("FRONTEND_CALLBACK_URL")
+	// Determine callback URL based on platform
+	// For desktop platform, redirect to frontend which will then open the desktop app
+	// The desktop app will then call the /complete endpoint
+	var frontendCallbackURL string
+	frontendCallbackURL = os.Getenv("FRONTEND_CALLBACK_URL")
 	if frontendCallbackURL == "" {
-		frontendCallbackURL = "http://localhost:3000/auth/callback" // Default for development
+		frontendCallbackURL = "http://localhost:3000/auth/callback"
 	}
 
-	// Add one-time code to URL
-	redirectURL := fmt.Sprintf("%s?code=%s", frontendCallbackURL, url.QueryEscape(oneTimeCode))
+	// Add one-time code and state to URL
+	redirectURL := fmt.Sprintf("%s?code=%s&state=%s", frontendCallbackURL, url.QueryEscape(oneTimeCode), url.QueryEscape(state))
 
 	log.Printf("🔗 Redirecting to frontend with one-time code: %s", redirectURL)
 	c.Redirect(http.StatusFound, redirectURL)
 }
 
-// Helper method to redirect to frontend with error (via session)
-func (h *OAuthHandler) redirectToFrontendWithError(c *gin.Context, error, errorDescription string) {
-	// For consistency with success flow, we should include session ID even for errors
-	// so the frontend can check the session status to get the actual error
+// Helper method to redirect to frontend with error
+// Always redirects to the frontend HTTP callback URL, regardless of platform
+// The frontend will handle opening desktop app if needed
+func (h *OAuthHandler) redirectToFrontendWithError(c *gin.Context, error, errorDescription string, platform ...string) {
+	// Always redirect to frontend HTTP callback URL
+	// The frontend page will handle opening the desktop app if platform is "desktop"
 	frontendCallbackURL := os.Getenv("FRONTEND_CALLBACK_URL")
 	if frontendCallbackURL == "" {
 		frontendCallbackURL = "http://localhost:3000/auth/callback"

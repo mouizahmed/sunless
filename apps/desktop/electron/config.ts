@@ -1,4 +1,3 @@
-// Import app first to avoid circular dependency
 import { app } from "electron";
 
 // Configuration management for the Electron app
