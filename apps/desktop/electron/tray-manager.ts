@@ -9,13 +9,15 @@ const getAppVersion = () => `v${app.getVersion()}`;
 
 export function createTray() {
   let iconPath;
+  const iconName = process.platform === "darwin" ? "icon-macos.png" : "icon.png";
+
   if (app.isPackaged) {
-    iconPath = path.join(process.resourcesPath, "build", "icon.png");
+    iconPath = path.join(process.resourcesPath, "build", iconName);
   } else {
     iconPath = path.join(
       process.env.APP_ROOT || path.join(__dirname, ".."),
       "build",
-      "icon.png",
+      iconName,
     );
   }
 
@@ -27,9 +29,7 @@ export function createTray() {
     if (process.platform === "darwin") {
       // macOS menu bar icons should be 16x16 or 22x22
       icon = icon.resize({ width: 22, height: 22 });
-      // Note: template images require monochrome (black/transparent) icons
-      // Disabled for now to use the colored icon
-      // icon.setTemplateImage(true);
+      icon.setTemplateImage(true);
     } else if (process.platform === "win32") {
       // Windows tray icons should be 16x16 or 32x32
       icon = icon.resize({ width: 16, height: 16 });
