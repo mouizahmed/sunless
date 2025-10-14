@@ -646,23 +646,42 @@ export function AppSidebar({ activeView }: AppSidebarProps) {
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="w-full justify-start gap-3 px-2 py-1.5 h-auto hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md"
+                  className="w-full justify-between gap-3 px-2 py-1.5 h-auto hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md"
                   style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
                 >
-                  <div className="flex items-center gap-3 flex-1">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
                     {user.picture ? (
                       <img
                         src={user.picture}
                         alt="Profile"
-                        className="w-8 h-8 rounded-full border-2 border-neutral-200 dark:border-neutral-600"
+                        className="w-8 h-8 rounded-full object-cover border-2 border-neutral-200 dark:border-neutral-600"
+                        referrerPolicy="no-referrer"
+                        crossOrigin="anonymous"
+                        onLoad={(e) => {
+                          const fallback = e.currentTarget.nextElementSibling;
+                          if (fallback) {
+                            (fallback as HTMLElement).style.display = "none";
+                          }
+                        }}
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                          const fallback = e.currentTarget.nextElementSibling;
+                          if (fallback) {
+                            (fallback as HTMLElement).style.display = "flex";
+                          }
+                        }}
                       />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-neutral-300 dark:bg-neutral-600 flex items-center justify-center">
-                        <span className="text-sm font-medium text-neutral-600 dark:text-neutral-300">
-                          {user.name.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                    )}
+                    ) : null}
+                    <div
+                      className="w-8 h-8 rounded-full bg-neutral-300 dark:bg-neutral-600 flex items-center justify-center"
+                      style={{
+                        display: user.picture ? "none" : "flex",
+                      }}
+                    >
+                      <span className="text-sm font-medium text-neutral-600 dark:text-neutral-300">
+                        {user.name.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
                     <div className="flex-1 min-w-0 text-left">
                       <p className="text-sm font-medium truncate text-neutral-900 dark:text-neutral-100">
                         {user.name}
