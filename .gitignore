@@ -20,3 +20,5 @@ go.work.sum
 database_design.md
 database_schema.sql
 /backend/cmd/url-extractor
+
+.claude
