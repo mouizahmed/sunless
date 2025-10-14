@@ -17,28 +17,28 @@ function AppLayout() {
   const { canGoBack, handleBack } = useNavigationHistory();
   const { config } = useTopBar();
   const { isLoading } = useAuth();
-  const [wsError, setWsError] = useState(false);
+  const [criticalError, setCriticalError] = useState<string | null>(null);
 
   // Subscribe to WebSocket critical errors
   useEffect(() => {
-    const unsubscribe = webSocketManager.onError(() => {
-      setWsError(true);
+    const unsubscribe = webSocketManager.onCriticalError((error) => {
+      setCriticalError(error);
     });
 
     return unsubscribe;
   }, []);
 
-  // Show WebSocket error screen
-  if (wsError) {
+  // Show critical error screen
+  if (criticalError) {
     return (
       <CriticalError
-        title="Connection lost"
-        message="Unable to maintain connection to the server. Please check your internet connection and try again."
+        title="Something went wrong"
+        message={criticalError}
         onRetry={() => {
-          setWsError(false);
+          setCriticalError(null);
           webSocketManager.initialize();
         }}
-        retryText="Reconnect"
+        retryText="Retry"
       />
     );
   }
@@ -51,18 +51,6 @@ function AppLayout() {
     );
   }
 
-  const handleSearch = () => {
-    console.log("Search clicked");
-  };
-
-  const handleUploadFile = () => {
-    console.log("Upload File clicked");
-  };
-
-  const handleNewMeeting = () => {
-    console.log("New Meeting clicked");
-  };
-
   return (
     <div
       className={`h-screen ${
@@ -72,9 +60,6 @@ function AppLayout() {
       {config.visible !== false && (
         <TopBar
           onBack={handleBack}
-          onSearch={handleSearch}
-          onUploadFile={handleUploadFile}
-          onNewMeeting={handleNewMeeting}
           showBackButton={canGoBack}
           showSearchBar={config.showSearchBar}
           showActionButtons={config.showActionButtons}

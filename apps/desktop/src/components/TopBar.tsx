@@ -6,9 +6,6 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 
 interface TopBarProps {
   onBack?: () => void;
-  onSearch?: () => void;
-  onUploadFile?: () => void;
-  onNewMeeting?: () => void;
   showBackButton?: boolean;
   showSearchBar?: boolean;
   showActionButtons?: boolean;
@@ -18,15 +15,24 @@ interface TopBarProps {
 
 function TopBar({
   onBack,
-  onSearch,
-  onUploadFile,
-  onNewMeeting,
   showBackButton = false,
   showSearchBar = false,
   showActionButtons = false,
 }: TopBarProps) {
   const isMacOS = window.env?.platform === "darwin";
   const { isMaximized } = useWindowState();
+
+  const handleSearch = () => {
+    console.log("Search clicked");
+  };
+
+  const handleUploadFile = () => {
+    console.log("Upload File clicked");
+  };
+
+  const handleNewMeeting = () => {
+    console.log("New Meeting clicked");
+  };
 
   return (
     <div
@@ -62,7 +68,7 @@ function TopBar({
             variant="ghost"
             size="sm"
             className="flex items-center gap-2 px-2 text-xs hover:bg-neutral-100 dark:hover:bg-neutral-800"
-            onClick={onSearch}
+            onClick={handleSearch}
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
           >
             <Search size={12} />
@@ -78,7 +84,7 @@ function TopBar({
               size="sm"
               variant="ghost"
               className="px-2 py-1 text-xs hover:bg-neutral-100 dark:hover:bg-neutral-800"
-              onClick={onUploadFile}
+              onClick={handleUploadFile}
               style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
             >
               <Upload size={12} />
@@ -86,7 +92,7 @@ function TopBar({
             <Button
               variant="default"
               className="px-2 py-1 h-auto rounded-md bg-violet-600 text-white hover:bg-violet-700 text-xs"
-              onClick={onNewMeeting}
+              onClick={handleNewMeeting}
               style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
             >
               Start a Session

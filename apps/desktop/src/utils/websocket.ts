@@ -6,12 +6,14 @@ export interface WSMessage {
 }
 
 export type MessageHandler = (data: unknown) => void;
-export type ErrorHandler = () => void;
+export type ErrorHandler = (error: string) => void;
+export type CriticalErrorHandler = (error: string) => void;
 
 class WebSocketManager {
   private ws: WebSocket | null = null;
   private handlers: Map<string, MessageHandler[]> = new Map();
   private errorHandlers: ErrorHandler[] = [];
+  private criticalErrorHandlers: CriticalErrorHandler[] = [];
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000; // Start with 1 second
@@ -38,11 +40,13 @@ class WebSocketManager {
       }
 
       // Get base URL
-      const baseUrl = (window as unknown as { BACKEND_URL?: string }).BACKEND_URL || "http://localhost:8080";
-      const wsUrl = baseUrl.replace(/^http/, 'ws') + `/api/ws`;
+      const baseUrl =
+        (window as unknown as { BACKEND_URL?: string }).BACKEND_URL ||
+        "http://localhost:8080";
+      const wsUrl = baseUrl.replace(/^http/, "ws") + `/api/ws`;
 
       // Create WebSocket connection with auth token as sub-protocol
-      this.ws = new WebSocket(wsUrl, ['bearer', idToken]);
+      this.ws = new WebSocket(wsUrl, ["bearer", idToken]);
 
       this.ws.onopen = () => {
         console.log("✅ WebSocket connected");
@@ -65,14 +69,23 @@ class WebSocketManager {
         console.log("🔌 WebSocket disconnected:", event.code, event.reason);
         this.isConnecting = false;
         this.ws = null;
+
+        // Notify about disconnection (non-critical during reconnect attempts)
+        if (
+          this.shouldAutoConnect &&
+          this.reconnectAttempts < this.maxReconnectAttempts
+        ) {
+          this.notifyError("Connection lost, attempting to reconnect...");
+        }
+
         this.attemptReconnect();
       };
 
       this.ws.onerror = (error) => {
         console.error("❌ WebSocket error:", error);
         this.isConnecting = false;
+        this.notifyError("WebSocket connection error");
       };
-
     } catch (error) {
       console.error("❌ Failed to connect WebSocket:", error);
       this.isConnecting = false;
@@ -81,25 +94,26 @@ class WebSocketManager {
   }
 
   private attemptReconnect() {
-    if (!this.shouldAutoConnect || this.reconnectAttempts >= this.maxReconnectAttempts) {
+    if (
+      !this.shouldAutoConnect ||
+      this.reconnectAttempts >= this.maxReconnectAttempts
+    ) {
       if (!this.shouldAutoConnect) {
         console.log("🔌 WebSocket auto-reconnect disabled");
       } else {
         console.error("❌ Max WebSocket reconnection attempts reached");
-        // Trigger error handlers after max attempts
-        this.errorHandlers.forEach(handler => {
-          try {
-            handler();
-          } catch (error) {
-            console.error("❌ Error in WebSocket error handler:", error);
-          }
-        });
+        // Trigger critical error handlers after max attempts
+        this.notifyCriticalError(
+          "Connection lost - unable to reconnect after multiple attempts",
+        );
       }
       return;
     }
 
     this.reconnectAttempts++;
-    console.log(`🔄 Attempting WebSocket reconnection ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${this.reconnectDelay}ms`);
+    console.log(
+      `🔄 Attempting WebSocket reconnection ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${this.reconnectDelay}ms`,
+    );
 
     setTimeout(() => {
       this.connect();
@@ -112,16 +126,43 @@ class WebSocketManager {
   private handleMessage(message: WSMessage) {
     const handlers = this.handlers.get(message.type);
     if (handlers) {
-      handlers.forEach(handler => {
+      handlers.forEach((handler) => {
         try {
           handler(message.data);
         } catch (error) {
-          console.error(`❌ Error in WebSocket handler for ${message.type}:`, error);
+          console.error(
+            `❌ Error in WebSocket handler for ${message.type}:`,
+            error,
+          );
         }
       });
     } else {
-      console.warn(`⚠️ No handlers registered for WebSocket message type: ${message.type}`);
+      console.warn(
+        `⚠️ No handlers registered for WebSocket message type: ${message.type}`,
+      );
     }
+  }
+
+  private notifyError(error: string) {
+    console.warn("⚠️ WebSocket error:", error);
+    this.errorHandlers.forEach((handler) => {
+      try {
+        handler(error);
+      } catch (handlerError) {
+        console.error("❌ Error in error handler:", handlerError);
+      }
+    });
+  }
+
+  private notifyCriticalError(error: string) {
+    console.error("🚨 Critical WebSocket error:", error);
+    this.criticalErrorHandlers.forEach((handler) => {
+      try {
+        handler(error);
+      } catch (handlerError) {
+        console.error("❌ Error in critical error handler:", handlerError);
+      }
+    });
   }
 
   public subscribe(messageType: string, handler: MessageHandler) {
@@ -139,7 +180,9 @@ class WebSocketManager {
         const index = handlers.indexOf(handler);
         if (index > -1) {
           handlers.splice(index, 1);
-          console.log(`🗑️ Unsubscribed from WebSocket message type: ${messageType}`);
+          console.log(
+            `🗑️ Unsubscribed from WebSocket message type: ${messageType}`,
+          );
         }
       }
     };
@@ -148,20 +191,35 @@ class WebSocketManager {
   public onError(handler: ErrorHandler) {
     this.errorHandlers.push(handler);
 
-    console.log("📝 Subscribed to WebSocket critical errors");
+    console.log("Subscribed to WebSocket errors");
 
     // Return unsubscribe function
     return () => {
       const index = this.errorHandlers.indexOf(handler);
       if (index > -1) {
         this.errorHandlers.splice(index, 1);
-        console.log("🗑️ Unsubscribed from WebSocket critical errors");
+        console.log("Unsubscribed from WebSocket errors");
+      }
+    };
+  }
+
+  public onCriticalError(handler: CriticalErrorHandler) {
+    this.criticalErrorHandlers.push(handler);
+
+    console.log("Subscribed to WebSocket critical errors");
+
+    // Return unsubscribe function
+    return () => {
+      const index = this.criticalErrorHandlers.indexOf(handler);
+      if (index > -1) {
+        this.criticalErrorHandlers.splice(index, 1);
+        console.log("Unsubscribed from WebSocket critical errors");
       }
     };
   }
 
   public initialize() {
-    console.log("🔌 Initializing WebSocket connection...");
+    console.log("Initializing WebSocket connection...");
     this.shouldAutoConnect = true;
     this.reconnectAttempts = 0;
     this.reconnectDelay = 1000;
@@ -188,5 +246,5 @@ export const webSocketManager = new WebSocketManager();
 
 // Export message type constants
 export const WS_MESSAGE_TYPES = {
-  CALENDAR_UPDATED: 'calendar_updated',
+  CALENDAR_UPDATED: "calendar_updated",
 } as const;
