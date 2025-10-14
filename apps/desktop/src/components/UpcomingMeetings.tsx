@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { makeAuthenticatedApiCall } from "@/utils/firebase-api";
 import { webSocketManager, WS_MESSAGE_TYPES } from "@/utils/websocket";
 import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "./ui/button";
 
 interface Meeting {
   id: string;
@@ -263,13 +264,14 @@ export function UpcomingMeetings() {
         <h2 className="text-lg font-medium text-neutral-900 dark:text-neutral-100">
           Coming up
         </h2>
-        <button
+        <Button
           onClick={() => setShowOnlyMeetings(!showOnlyMeetings)}
-          className="text-xs px-2 py-1 rounded border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-700"
+          size="sm"
+          className="text-xs rounded-md border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-700 text-neutral-600 dark:text-neutral-400"
           style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
         >
           {showOnlyMeetings ? "Show All" : "Meetings Only"}
-        </button>
+        </Button>
       </div>
 
       {filteredMeetings.length > 0 ? (

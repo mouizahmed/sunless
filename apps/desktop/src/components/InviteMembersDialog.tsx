@@ -21,7 +21,11 @@ interface InviteMembersDialogProps {
   workspaceName?: string;
 }
 
-export function InviteMembersDialog({ isOpen, onClose, workspaceName }: InviteMembersDialogProps) {
+export function InviteMembersDialog({
+  isOpen,
+  onClose,
+  workspaceName,
+}: InviteMembersDialogProps) {
   const [emails, setEmails] = useState<string[]>([]);
   const [currentEmail, setCurrentEmail] = useState("");
   const [sending, setSending] = useState(false);
@@ -48,7 +52,7 @@ export function InviteMembersDialog({ isOpen, onClose, workspaceName }: InviteMe
   };
 
   const removeEmail = (emailToRemove: string) => {
-    setEmails(emails.filter(email => email !== emailToRemove));
+    setEmails(emails.filter((email) => email !== emailToRemove));
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -74,7 +78,7 @@ export function InviteMembersDialog({ isOpen, onClose, workspaceName }: InviteMe
       console.log("Sending invites to:", emails, "with role:", emailRole);
 
       // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Close dialog and reset form on success
       onClose?.();
@@ -87,7 +91,6 @@ export function InviteMembersDialog({ isOpen, onClose, workspaceName }: InviteMe
     }
   };
 
-
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose?.()}>
       <DialogContent className="sm:max-w-lg bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-700">
@@ -96,7 +99,8 @@ export function InviteMembersDialog({ isOpen, onClose, workspaceName }: InviteMe
             Invite members to {workspaceName || "workspace"}
           </DialogTitle>
           <DialogDescription className="text-neutral-600 dark:text-neutral-400">
-            Invite people to collaborate in your workspace. They'll receive an email with instructions to join.
+            Invite people to collaborate in your workspace. They'll receive an
+            email with instructions to join.
           </DialogDescription>
         </DialogHeader>
 
@@ -104,7 +108,10 @@ export function InviteMembersDialog({ isOpen, onClose, workspaceName }: InviteMe
           {/* Email Invites Section */}
           <div className="space-y-3">
             <div className="space-y-2">
-              <Label htmlFor="email-input" className="text-neutral-900 dark:text-neutral-100">
+              <Label
+                htmlFor="email-input"
+                className="text-neutral-900 dark:text-neutral-100"
+              >
                 Email addresses
               </Label>
               <div className="flex gap-2">
@@ -131,7 +138,10 @@ export function InviteMembersDialog({ isOpen, onClose, workspaceName }: InviteMe
 
             {/* Role Selection for Email Invites */}
             <div className="space-y-2">
-              <Label htmlFor="email-role" className="text-sm text-neutral-700 dark:text-neutral-300">
+              <Label
+                htmlFor="email-role"
+                className="text-sm text-neutral-700 dark:text-neutral-300"
+              >
                 Role for email invites
               </Label>
               <AccessSelector
@@ -156,14 +166,15 @@ export function InviteMembersDialog({ isOpen, onClose, workspaceName }: InviteMe
                       className="bg-violet-100 dark:bg-violet-900/30 text-violet-800 dark:text-violet-200 px-2 py-1"
                     >
                       {email}
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
                         onClick={() => removeEmail(email)}
-                        className="ml-2 hover:bg-violet-200 dark:hover:bg-violet-800 rounded-full p-0.5"
+                        className="ml-2 h-auto p-0.5 hover:bg-violet-200 dark:hover:bg-violet-800 rounded-full"
                         disabled={sending}
                       >
                         <X size={12} />
-                      </button>
+                      </Button>
                     </Badge>
                   ))}
                 </div>
@@ -182,7 +193,11 @@ export function InviteMembersDialog({ isOpen, onClose, workspaceName }: InviteMe
               className="w-full bg-violet-600 hover:bg-violet-700 text-white"
             >
               <UserPlus size={16} className="mr-2" />
-              {sending ? "Sending invites..." : `Send ${emails.length} invite${emails.length !== 1 ? 's' : ''}`}
+              {sending
+                ? "Sending invites..."
+                : `Send ${emails.length} invite${
+                    emails.length !== 1 ? "s" : ""
+                  }`}
             </Button>
           </div>
         </div>

@@ -49,7 +49,7 @@ function TopBar({
           <Button
             variant="ghost"
             size="sm"
-            className="p-1 h-auto hover:bg-neutral-100 dark:hover:bg-neutral-800"
+            className="flex items-center gap-2 px-2 text-xs hover:bg-neutral-100 dark:hover:bg-neutral-800"
             onClick={onBack}
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
           >

@@ -12,10 +12,10 @@ import {
   FolderOpen,
   ChevronRight,
   ChevronDown,
-  Grid3X3,
   Users,
   UserPlus,
   Lock,
+  Calendar,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -429,6 +429,12 @@ export function AppSidebar({ activeView }: AppSidebarProps) {
       onClick: () => console.log("Shared with me clicked"),
       isActive: activeView === "shared",
     },
+    {
+      icon: Calendar,
+      label: "Calendar",
+      onClick: () => console.log("Calendar clicked"),
+      isActive: activeView === "calendar",
+    },
   ];
 
   return (
@@ -470,15 +476,6 @@ export function AppSidebar({ activeView }: AppSidebarProps) {
                 onClick={() => setShowCreateFolderDialog(true)}
               >
                 <Plus size={10} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-5 w-5 p-0 hover:bg-neutral-200 dark:hover:bg-neutral-700"
-                style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
-                onClick={() => console.log("Browse folders clicked")}
-              >
-                <Grid3X3 size={10} />
               </Button>
             </div>
           </div>
