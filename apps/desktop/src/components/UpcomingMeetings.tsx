@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 // Icons removed - not used in this component
 import { makeAuthenticatedApiCall } from "@/utils/firebase-api";
 import { webSocketManager, WS_MESSAGE_TYPES } from "@/utils/websocket";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Meeting {
   id: string;
@@ -29,13 +30,14 @@ interface CalendarEvent {
 }
 
 export function UpcomingMeetings() {
+  const { user } = useAuth();
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showOnlyMeetings, setShowOnlyMeetings] = useState(false);
 
-  // Simple cache key for calendar events
-  const cacheKey = "calendar_events";
+  // User-specific cache key for calendar events
+  const cacheKey = user ? `calendar_events_${user.id}` : null;
 
   const fetchUpcomingMeetings = async () => {
     try {
@@ -43,15 +45,17 @@ export function UpcomingMeetings() {
       setError(null);
 
       // Try cache first
-      const cached = localStorage.getItem(cacheKey);
-      if (cached) {
-        const { data, timestamp } = JSON.parse(cached);
-        // Cache valid for 2 minutes (calendar events change less frequently than expected)
-        if (Date.now() - timestamp < 2 * 60 * 1000) {
-          console.log("🚀 Calendar events loaded from cache instantly");
-          setMeetings(data);
-          setLoading(false);
-          return;
+      if (cacheKey) {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          const { data, timestamp } = JSON.parse(cached);
+          // Cache valid for 2 minutes (calendar events change less frequently than expected)
+          if (Date.now() - timestamp < 2 * 60 * 1000) {
+            console.log("🚀 Calendar events loaded from cache instantly");
+            setMeetings(data);
+            setLoading(false);
+            return;
+          }
         }
       }
 
@@ -97,13 +101,15 @@ export function UpcomingMeetings() {
         setMeetings(formattedMeetings);
 
         // Cache the result
-        localStorage.setItem(
-          cacheKey,
-          JSON.stringify({
-            data: formattedMeetings,
-            timestamp: Date.now(),
-          }),
-        );
+        if (cacheKey) {
+          localStorage.setItem(
+            cacheKey,
+            JSON.stringify({
+              data: formattedMeetings,
+              timestamp: Date.now(),
+            }),
+          );
+        }
       } else {
         console.log("📅 No events found");
         setMeetings([]);
@@ -118,7 +124,14 @@ export function UpcomingMeetings() {
   };
 
   useEffect(() => {
-    console.log("📅 UpcomingMeetings component mounted, fetching meetings...");
+    // Clear meetings if no user
+    if (!user) {
+      setMeetings([]);
+      setLoading(false);
+      return;
+    }
+
+    console.log("📅 UpcomingMeetings: user changed, fetching meetings...");
     fetchUpcomingMeetings();
 
     // Subscribe to WebSocket calendar updates
@@ -178,7 +191,7 @@ export function UpcomingMeetings() {
     return () => {
       unsubscribe();
     };
-  }, []);
+  }, [user]);
 
   const formatMeetingDate = (startTime: string) => {
     const date = new Date(startTime);

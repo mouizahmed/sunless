@@ -27,6 +27,27 @@ func (h *WorkspaceHandler) GetUserWorkspaces(c *gin.Context) {
 		return
 	}
 
+	// Get user info from context for workspace creation
+	userName := ""
+	userEmail := ""
+	if claims, exists := c.Get("firebaseClaims"); exists {
+		if claimsMap, ok := claims.(map[string]interface{}); ok {
+			if name, ok := claimsMap["name"].(string); ok {
+				userName = name
+			}
+			if email, ok := claimsMap["email"].(string); ok {
+				userEmail = email
+			}
+		}
+	}
+
+	// Ensure user has at least one workspace (auto-creates if none exist)
+	_, err = h.workspaceRepo.EnsureUserHasWorkspace(userID, userName, userEmail)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to ensure workspace exists"})
+		return
+	}
+
 	workspaces, err := h.workspaceRepo.GetUserWorkspaces(userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
@@ -37,7 +58,6 @@ func (h *WorkspaceHandler) GetUserWorkspaces(c *gin.Context) {
 		Workspaces: workspaces,
 	})
 }
-
 
 // GetWorkspace retrieves a specific workspace by ID
 func (h *WorkspaceHandler) GetWorkspace(c *gin.Context) {

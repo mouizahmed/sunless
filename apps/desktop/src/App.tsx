@@ -8,9 +8,7 @@ import { useNavigationHistory } from "./hooks/useNavigationHistory";
 import { TopBarProvider, useTopBar } from "./contexts/TopBarContext";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { WorkspaceProvider } from "./contexts/WorkspaceContext";
-import { useWorkspace } from "./hooks/useWorkspace";
 import { FolderNavigationProvider } from "./contexts/FolderNavigationContext";
-import { CreateWorkspaceScreen } from "./components/CreateWorkspaceScreen";
 import Loading from "./components/Loading";
 import { CriticalError } from "./components/CriticalError";
 import { webSocketManager } from "./utils/websocket";
@@ -18,8 +16,7 @@ import { webSocketManager } from "./utils/websocket";
 function AppLayout() {
   const { canGoBack, handleBack } = useNavigationHistory();
   const { config } = useTopBar();
-  const { isLoading, user } = useAuth();
-  const { workspaces, isLoading: workspacesLoading } = useWorkspace();
+  const { isLoading } = useAuth();
   const [wsError, setWsError] = useState(false);
 
   // Subscribe to WebSocket critical errors
@@ -46,17 +43,12 @@ function AppLayout() {
     );
   }
 
-  if (isLoading || workspacesLoading) {
+  if (isLoading) {
     return (
       <div className="h-screen flex items-center justify-center">
         <Loading />
       </div>
     );
-  }
-
-  // Show workspace creation screen if user is authenticated but has no workspaces
-  if (user && !workspacesLoading && workspaces.length === 0) {
-    return <CreateWorkspaceScreen />;
   }
 
   const handleSearch = () => {
@@ -93,7 +85,6 @@ function AppLayout() {
         <Routes>
           <Route path="/welcome" element={<Welcome />} />
           <Route path="/dashboard/*" element={<DashboardLayout />} />
-          <Route path="/" element={<div />} />
         </Routes>
       </div>
     </div>

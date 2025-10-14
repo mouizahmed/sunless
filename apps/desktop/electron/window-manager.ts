@@ -70,6 +70,30 @@ export function createWindow() {
     win.loadFile(path.join(RENDERER_DIST, "index.html"));
   }
 
+  // Prevent user from refreshing the page in production
+  // (In dev mode, refresh is allowed for development convenience)
+  if (!VITE_DEV_SERVER_URL) {
+    win.webContents.on("before-input-event", (event, input) => {
+      // Block F5
+      if (input.key === "F5") {
+        event.preventDefault();
+        return;
+      }
+
+      // Block Ctrl+R / Cmd+R
+      if ((input.control || input.meta) && input.key === "r") {
+        event.preventDefault();
+        return;
+      }
+
+      // Block Ctrl+Shift+R / Cmd+Shift+R (hard reload)
+      if ((input.control || input.meta) && input.shift && input.key === "r") {
+        event.preventDefault();
+        return;
+      }
+    });
+  }
+
   win.on("close", (event) => {
     if (!isQuitting) {
       event.preventDefault();

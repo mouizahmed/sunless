@@ -16,10 +16,15 @@ const makeApiRequest = async (url: string, options: RequestInit = {}) => {
     (window as unknown as { BACKEND_URL?: string }).BACKEND_URL ||
     "http://localhost:8080";
 
-  const response = await makeAuthenticatedApiCall(`${baseUrl}/api${url}`, options);
+  const response = await makeAuthenticatedApiCall(
+    `${baseUrl}/api${url}`,
+    options,
+  );
 
   if (!response.ok) {
-    const errorData: { error?: string } = await response.json().catch(() => ({}));
+    const errorData: { error?: string } = await response
+      .json()
+      .catch(() => ({}));
     throw new globalThis.Error(
       errorData.error || `HTTP ${response.status}: ${response.statusText}`,
     );
@@ -40,7 +45,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [currentWorkspace, setCurrentWorkspaceState] =
     useState<Workspace | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [criticalError, setCriticalError] = useState<boolean>(false);
 
@@ -88,7 +93,9 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({
       );
     } catch (err) {
       const errorMessage =
-        err instanceof globalThis.Error ? err.message : "Failed to fetch workspaces";
+        err instanceof globalThis.Error
+          ? err.message
+          : "Failed to fetch workspaces";
       setError(errorMessage);
       setWorkspaces([]); // Ensure workspaces is always an array
       console.error("❌ Failed to fetch workspaces:", err);
@@ -110,6 +117,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({
       setCurrentWorkspaceState(null);
       setError(null);
       setCriticalError(false);
+      setIsLoading(false);
     }
   }, [user, fetchWorkspaces]);
 
@@ -166,7 +174,9 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({
       return newWorkspace;
     } catch (err) {
       const errorMessage =
-        err instanceof globalThis.Error ? err.message : "Failed to create workspace";
+        err instanceof globalThis.Error
+          ? err.message
+          : "Failed to create workspace";
       setError(errorMessage);
       throw err;
     }
@@ -203,7 +213,9 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({
       return updatedWorkspace;
     } catch (err) {
       const errorMessage =
-        err instanceof globalThis.Error ? err.message : "Failed to update workspace";
+        err instanceof globalThis.Error
+          ? err.message
+          : "Failed to update workspace";
       setError(errorMessage);
       throw err;
     }
@@ -231,7 +243,9 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({
       console.log("✅ Deleted workspace");
     } catch (err) {
       const errorMessage =
-        err instanceof globalThis.Error ? err.message : "Failed to delete workspace";
+        err instanceof globalThis.Error
+          ? err.message
+          : "Failed to delete workspace";
       setError(errorMessage);
       throw err;
     }

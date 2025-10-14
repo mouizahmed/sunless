@@ -152,6 +152,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     try {
       webSocketManager.disconnect();
+
+      // Clear all cached data from localStorage
+      localStorage.clear();
+      console.log("🧹 Cleared all cached data");
+
       await auth.signOut();
       await window.electronAPI.logout();
       setUser(null);
@@ -163,6 +168,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logoutEverywhere = async () => {
     try {
       webSocketManager.disconnect();
+
+      // Clear all cached data from localStorage
+      localStorage.clear();
+      console.log("🧹 Cleared all cached data");
 
       // Get Firebase ID token
       const idToken = await auth.currentUser?.getIdToken();
@@ -183,6 +192,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("Global logout error:", error);
       // Even if backend logout fails, still sign out locally
+
+      // Clear all cached data from localStorage
+      localStorage.clear();
+
       await auth.signOut();
       setUser(null);
     }
