@@ -5,6 +5,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import Typewriter from "typewriter-effect";
 import Loading from "@/components/Loading";
 
+const AUTH_BUTTON_CLASSES =
+  "w-full cursor-pointer py-3 text-base border-input text-card-foreground bg-card hover:bg-accent hover:text-accent-foreground disabled:opacity-50";
+
 function Welcome() {
   const { setConfig } = useTopBar();
   const {
@@ -62,7 +65,7 @@ function Welcome() {
 
         <Button
           variant="outline"
-          className="w-full cursor-pointer py-3 text-base border-input text-card-foreground bg-card hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+          className={AUTH_BUTTON_CLASSES}
           onClick={loginWithGoogle}
           disabled={loginLoading}
         >
@@ -87,7 +90,7 @@ function Welcome() {
 
         <Button
           variant="outline"
-          className="w-full cursor-pointer py-3 text-base border-input text-card-foreground bg-card hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+          className={AUTH_BUTTON_CLASSES}
           onClick={loginWithMicrosoft}
           disabled={loginLoading}
         >

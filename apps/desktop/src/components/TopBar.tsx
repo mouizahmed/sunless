@@ -9,8 +9,6 @@ interface TopBarProps {
   showBackButton?: boolean;
   showSearchBar?: boolean;
   showActionButtons?: boolean;
-  invisible?: boolean;
-  showBackOnInvisible?: boolean;
 }
 
 function TopBar({
@@ -46,9 +44,7 @@ function TopBar({
       }
     >
       <div className="flex items-center gap-2">
-        <div className="flex items-center gap-2">
-          <img src="./logo.png" alt="Sunless Logo" className="w-6 h-6" />
-        </div>
+        <img src="./logo.png" alt="Sunless Logo" className="w-6 h-6" />
         <SidebarTrigger />
 
         {showBackButton && (

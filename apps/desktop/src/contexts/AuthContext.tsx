@@ -155,7 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Clear all cached data from localStorage
       localStorage.clear();
-      console.log("🧹 Cleared all cached data");
+      console.log("Cleared all cached data");
 
       await auth.signOut();
       await window.electronAPI.logout();
@@ -171,7 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Clear all cached data from localStorage
       localStorage.clear();
-      console.log("🧹 Cleared all cached data");
+      console.log("Cleared all cached data");
 
       // Get Firebase ID token
       const idToken = await auth.currentUser?.getIdToken();
@@ -231,8 +231,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const authData = JSON.parse(result.token);
 
         if (authData.status === "pending") {
-          console.log(`✅ ${provider} OAuth flow started!`);
-          console.log("⏳ Waiting for completion in browser...");
+          console.log(`${provider} OAuth flow started!`);
+          console.log("Waiting for completion in browser...");
 
           // Set timeout to clear loading state if auth takes too long (5 minutes)
           authTimeoutRef.current = setTimeout(() => {
