@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import { AppSidebar } from "./AppSidebar";
+import { Sidebar } from "./Sidebar";
 import { useSidebar } from "./ui/sidebar";
 import { useFolderNavigation } from "@/contexts/FolderNavigationContext";
 import { DashboardContent } from "./DashboardContent";
@@ -22,7 +22,7 @@ export function DashboardLayout() {
 
   return (
     <div className={`flex h-full px-2 pb-2 ${isOpen ? "gap-2" : ""}`}>
-      <AppSidebar activeView={activeView} />
+      <Sidebar activeView={activeView} />
       <div className="flex-1 overflow-hidden select-none">
         <DashboardContent />
       </div>
