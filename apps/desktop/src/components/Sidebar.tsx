@@ -8,9 +8,9 @@ import {
   LucideIcon,
 } from "lucide-react";
 import { useFolderNavigation } from "@/contexts/FolderNavigationContext";
-import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
-import { CreateFolderDialog } from "./CreateFolderDialog";
-import { InviteMembersDialog } from "./InviteMembersDialog";
+import { CreateWorkspaceDialog } from "./dialogs/CreateWorkspaceDialog";
+import { CreateFolderDialog } from "./dialogs/CreateFolderDialog";
+import { InviteMembersDialog } from "./dialogs/InviteMembersDialog";
 import { FolderTree } from "./FolderTree";
 import { WorkspaceDropdown } from "./WorkspaceDropdown";
 import { UserProfileDropdown } from "./UserProfileDropdown";

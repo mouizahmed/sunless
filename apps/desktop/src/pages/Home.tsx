@@ -1,21 +1,9 @@
-import React, { useEffect } from "react";
-import { useTopBar } from "@/contexts/TopBarContext";
+import React from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { UpcomingMeetings } from "@/components/UpcomingMeetings";
 
 function Home() {
-  const { setConfig } = useTopBar();
   const { user } = useAuth();
-
-  useEffect(() => {
-    // Set up TopBar for dashboard
-    setConfig({
-      showSearchBar: true,
-      showActionButtons: true,
-    });
-  }, [setConfig]);
-
-  // No need to reset folder navigation - handled by DashboardLayout
 
   if (!user) {
     return (

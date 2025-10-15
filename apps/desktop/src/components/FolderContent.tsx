@@ -1,5 +1,5 @@
 // React import not needed for modern JSX transform
-import { FolderView } from "./FolderView";
+import { Folder } from "@/pages/Folder";
 import { useFolderNavigation } from "@/contexts/FolderNavigationContext";
 
 interface FolderContentProps {
@@ -11,7 +11,7 @@ export function FolderContent({ className }: FolderContentProps) {
 
   return (
     <div className={className}>
-      <FolderView
+      <Folder
         folderId={currentFolderId}
         onFolderChange={navigateToFolder}
       />

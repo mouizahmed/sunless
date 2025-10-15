@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Plus, FolderPlus, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -7,9 +7,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { FolderContentItem } from "./FolderContentItem";
-import { CreateFolderDialog } from "./CreateFolderDialog";
-import { Breadcrumbs } from "./Breadcrumbs";
+import { FolderContentItem } from "@/components/FolderContentItem";
+import { CreateFolderDialog } from "@/components/dialogs/CreateFolderDialog";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { makeAuthenticatedApiCall } from "@/utils/firebase-api";
 
@@ -27,19 +27,33 @@ interface FolderItem {
 
 // Breadcrumb interface removed - not needed anymore
 
-interface FolderViewProps {
+interface FolderProps {
   folderId?: string | null;
   onFolderChange?: (folderId: string | null) => void;
 }
 
-export function FolderView({ folderId, onFolderChange }: FolderViewProps) {
-  console.log("📂 FolderView render - folderId:", folderId);
+export function Folder({ folderId, onFolderChange }: FolderProps) {
+  console.log("📂 Folder render - folderId:", folderId);
 
   const { currentWorkspace } = useWorkspace();
   const [showCreateFolder, setShowCreateFolder] = useState(false);
 
+  interface Breadcrumb {
+    id: string;
+    name: string;
+  }
+
+  interface FolderData {
+    contents: {
+      folders: FolderItem[];
+      files: FolderItem[];
+    };
+    breadcrumbs: Breadcrumb[];
+    folder: FolderItem | null;
+  }
+
   // Simple state-based cache
-  const [folderData, setFolderData] = useState<any>(null);
+  const [folderData, setFolderData] = useState<FolderData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -264,7 +278,7 @@ export function FolderView({ folderId, onFolderChange }: FolderViewProps) {
             <div className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
               {error.message}
             </div>
-            <Button onClick={() => refetch()} variant="outline" size="sm">
+            <Button onClick={() => loadFolderData()} variant="outline" size="sm">
               Try Again
             </Button>
           </div>

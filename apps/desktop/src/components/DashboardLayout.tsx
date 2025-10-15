@@ -3,12 +3,14 @@ import { useLocation } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { useSidebar } from "./ui/sidebar";
 import { useFolderNavigation } from "@/contexts/FolderNavigationContext";
+import { useTopBar } from "@/contexts/TopBarContext";
 import { DashboardContent } from "./DashboardContent";
 
 export function DashboardLayout() {
   const { isOpen } = useSidebar();
   const location = useLocation();
   const { navigateToFolder } = useFolderNavigation();
+  const { setConfig } = useTopBar();
 
   // Initialize to dashboard home on mount
   useEffect(() => {
@@ -16,6 +18,14 @@ export function DashboardLayout() {
       navigateToFolder(null);
     }
   }, []); // Only run once on mount
+
+  // Configure TopBar for dashboard
+  useEffect(() => {
+    setConfig({
+      showSearchBar: true,
+      showActionButtons: true,
+    });
+  }, [setConfig]);
 
   const { currentFolderId } = useFolderNavigation();
   const activeView = currentFolderId ? "folder" : "home";
