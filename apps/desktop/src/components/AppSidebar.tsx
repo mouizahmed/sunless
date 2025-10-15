@@ -16,6 +16,7 @@ import {
   UserPlus,
   Lock,
   Calendar,
+  CircleQuestionMark,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -716,14 +717,7 @@ export function AppSidebar({ activeView }: AppSidebarProps) {
                   className="flex items-center gap-3 px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 hover:text-white cursor-pointer"
                   style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
                 >
-                  <Plus size={14} />
-                  <span>Copy invite link</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="flex items-center gap-3 px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 hover:text-white cursor-pointer"
-                  style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
-                >
-                  <Settings size={14} />
+                  <CircleQuestionMark size={14} />
                   <span>Help Center</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -733,7 +727,7 @@ export function AppSidebar({ activeView }: AppSidebarProps) {
                   <Settings size={14} />
                   <span>Settings</span>
                 </DropdownMenuItem>
-                <DropdownMenuSeparator className="border-neutral-700" />
+                <div className="border-t border-neutral-700 mt-1 pt-1" />
                 <DropdownMenuItem
                   onClick={logout}
                   className="flex items-center gap-3 px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 hover:text-white cursor-pointer"
