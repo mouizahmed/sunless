@@ -1,5 +1,5 @@
 import { createContext, useContext, ReactNode } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 interface FolderNavigationContextType {
   currentFolderId: string | null;
@@ -29,10 +29,10 @@ export function FolderNavigationProvider({
   children,
 }: FolderNavigationProviderProps) {
   const navigate = useNavigate();
-  const params = useParams();
+  const location = useLocation();
 
-  // Derive current folder ID from URL
-  const currentFolderId = params.folderId || null;
+  // Derive current folder ID from URL path
+  const currentFolderId = location.pathname.match(/\/folder\/([^/]+)/)?.[1] || null;
 
   const navigateToFolder = (folderId: string | null) => {
     console.log("🧭 Navigating to folder:", folderId);

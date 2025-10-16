@@ -65,29 +65,33 @@ export function Folder() {
   const loadFolderData = useCallback(async () => {
     if (!currentWorkspace?.id || !folderId) return;
 
-    // Clear old data immediately when folder changes
-    setFolderData(null);
     setIsLoading(true);
     setError(null);
 
     try {
-      // Try cache first
+      // Step 1: Check cache for THIS specific folder
+      let hasCachedData = false;
       if (cacheKey) {
         const cached = localStorage.getItem(cacheKey);
         if (cached) {
-          const { data, timestamp } = JSON.parse(cached);
-          // Cache valid for 5 minutes
-          if (Date.now() - timestamp < 5 * 60 * 1000) {
-            console.log("🚀 Folder data loaded from cache instantly");
+          const { data } = JSON.parse(cached);
+          // Verify cache is for the correct folder
+          if (data.folder && data.folder.id === folderId) {
+            console.log("🚀 Showing cached folder instantly");
             setFolderData(data);
-            setIsLoading(false);
-            return;
+            setIsLoading(false); // Hide loading spinner for cached data
+            hasCachedData = true;
           }
         }
       }
 
-      // Fetch from API
-      console.log("📡 Fetching folder data from API...");
+      // Clear old data when navigating to different folder or no cache
+      if (!hasCachedData) {
+        setFolderData(null);
+      }
+
+      // Step 2: ALWAYS fetch fresh data from API (even if cache exists)
+      console.log("📡 Fetching fresh folder data from API...");
       const startTime = Date.now();
       const response = await makeAuthenticatedApiCall(
         `http://localhost:8080/api/folders/${folderId}?workspace_id=${currentWorkspace.id}`,
@@ -97,18 +101,19 @@ export function Folder() {
         throw new Error(`Failed to fetch folder data: ${response.status}`);
       }
 
-      const data = await response.json();
+      const freshData = await response.json();
       const endTime = Date.now();
-      console.log(`📡 Folder data fetched in ${endTime - startTime}ms`);
+      console.log(`📡 Folder synced in ${endTime - startTime}ms`);
 
-      setFolderData(data);
+      // Step 3: Update with fresh data
+      setFolderData(freshData);
 
-      // Cache the result
+      // Step 4: Update cache with fresh data
       if (cacheKey) {
         localStorage.setItem(
           cacheKey,
           JSON.stringify({
-            data,
+            data: freshData,
             timestamp: Date.now(),
           }),
         );
@@ -170,7 +175,7 @@ export function Folder() {
         return;
       }
 
-      // Optimistically update the state
+      // Optimistically update the local folder view
       setFolderData((currentData) => {
         if (!currentData || !currentData.contents) {
           return currentData;
@@ -184,7 +189,7 @@ export function Folder() {
           },
         };
 
-        // Update localStorage cache
+        // Update localStorage cache for this folder
         if (cacheKey) {
           localStorage.setItem(
             cacheKey,
@@ -198,7 +203,12 @@ export function Folder() {
         return updatedData;
       });
 
-      console.log("✅ Folder added to view instantly!");
+      // Notify sidebar to refresh (via window global)
+      if ((window as any).__handleFolderCreated) {
+        (window as any).__handleFolderCreated(newFolder);
+      }
+
+      console.log("✅ Folder added to view and sidebar notified!");
     },
     [cacheKey],
   );

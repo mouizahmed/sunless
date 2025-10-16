@@ -190,20 +190,19 @@ export function FolderTree({ onCreateFolder }: FolderTreeComponentProps) {
     setFoldersError(null);
 
     try {
+      // Step 1: Show cached data immediately for instant UI (if exists)
       if (cacheKey) {
         const cached = localStorage.getItem(cacheKey);
         if (cached) {
-          const { data, timestamp } = JSON.parse(cached);
-          if (Date.now() - timestamp < 10 * 60 * 1000) {
-            console.log("🚀 Folders loaded from cache instantly");
-            setFoldersData(data);
-            setFoldersLoading(false);
-            return;
-          }
+          const { data } = JSON.parse(cached);
+          console.log("🚀 Showing cached folders instantly");
+          setFoldersData(data);
+          setFoldersLoading(false); // Hide loading spinner for cached data
         }
       }
 
-      console.log("📡 Fetching folders from API...");
+      // Step 2: ALWAYS fetch fresh data from API (even if cache exists)
+      console.log("📡 Fetching fresh folders from API...");
       const startTime = Date.now();
       const response = await makeAuthenticatedApiCall(
         `http://localhost:8080/api/folders/all?workspace_id=${currentWorkspace.id}`,
@@ -213,17 +212,19 @@ export function FolderTree({ onCreateFolder }: FolderTreeComponentProps) {
         throw new Error(`Failed to fetch folders: ${response.status}`);
       }
 
-      const data = await response.json();
+      const freshData = await response.json();
       const endTime = Date.now();
-      console.log(`📡 Folders fetched in ${endTime - startTime}ms`);
+      console.log(`📡 Folders synced in ${endTime - startTime}ms`);
 
-      setFoldersData(data);
+      // Step 3: Update with fresh data
+      setFoldersData(freshData);
 
+      // Step 4: Update cache with fresh data
       if (cacheKey) {
         localStorage.setItem(
           cacheKey,
           JSON.stringify({
-            data,
+            data: freshData,
             timestamp: Date.now(),
           }),
         );
