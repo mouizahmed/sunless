@@ -1,12 +1,10 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, ReactNode } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 
 interface FolderNavigationContextType {
   currentFolderId: string | null;
-  setCurrentFolderId: (folderId: string | null) => void;
   navigateToFolder: (folderId: string | null) => void;
-  goBack: () => void;
-  canGoBack: boolean;
-  navigationHistory: (string | null)[];
+  navigateToNote: (noteId: string) => void;
 }
 
 const FolderNavigationContext = createContext<
@@ -30,54 +28,35 @@ interface FolderNavigationProviderProps {
 export function FolderNavigationProvider({
   children,
 }: FolderNavigationProviderProps) {
-  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
-  const [navigationHistory, setNavigationHistory] = useState<(string | null)[]>(
-    [null],
-  ); // Start with home
+  const navigate = useNavigate();
+  const params = useParams();
+
+  // Derive current folder ID from URL
+  const currentFolderId = params.folderId || null;
 
   const navigateToFolder = (folderId: string | null) => {
-    console.log(
-      "🧭 FolderNavigation - navigateToFolder called with:",
-      folderId,
-    );
+    console.log("🧭 Navigating to folder:", folderId);
 
-    // Don't add duplicate consecutive entries
-    if (folderId !== currentFolderId) {
-      setNavigationHistory((prev) => [...prev, folderId]);
-      console.log("📚 Navigation history updated:", [
-        ...navigationHistory,
-        folderId,
-      ]);
-    }
-
-    setCurrentFolderId(folderId);
-  };
-
-  const goBack = () => {
-    if (navigationHistory.length > 1) {
-      const newHistory = [...navigationHistory];
-      newHistory.pop(); // Remove current location
-      const previousLocation = newHistory[newHistory.length - 1];
-
-      console.log("⬅️ Going back to:", previousLocation);
-      console.log("📚 New history:", newHistory);
-
-      setNavigationHistory(newHistory);
-      setCurrentFolderId(previousLocation);
+    if (!folderId) {
+      // Navigate to dashboard home
+      navigate("/dashboard");
+    } else {
+      // Navigate to specific folder
+      navigate(`/dashboard/folder/${folderId}`);
     }
   };
 
-  const canGoBack = navigationHistory.length > 1;
+  const navigateToNote = (noteId: string) => {
+    console.log("📝 Navigating to note:", noteId);
+    navigate(`/dashboard/note/${noteId}`);
+  };
 
   return (
     <FolderNavigationContext.Provider
       value={{
         currentFolderId,
-        setCurrentFolderId,
         navigateToFolder,
-        goBack,
-        canGoBack,
-        navigationHistory,
+        navigateToNote,
       }}
     >
       {children}

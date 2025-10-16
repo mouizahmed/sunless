@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
+import { useParams } from "react-router-dom";
 import { Plus, FolderPlus, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,6 +12,7 @@ import { FolderContentItem } from "@/components/FolderContentItem";
 import { CreateFolderDialog } from "@/components/dialogs/CreateFolderDialog";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { useFolderNavigation } from "@/contexts/FolderNavigationContext";
 import { makeAuthenticatedApiCall } from "@/utils/firebase-api";
 
 interface FolderItem {
@@ -25,14 +27,10 @@ interface FolderItem {
   parent_id?: string;
 }
 
-// Breadcrumb interface removed - not needed anymore
+export function Folder() {
+  const { folderId } = useParams<{ folderId: string }>();
+  const { navigateToFolder } = useFolderNavigation();
 
-interface FolderProps {
-  folderId?: string | null;
-  onFolderChange?: (folderId: string | null) => void;
-}
-
-export function Folder({ folderId, onFolderChange }: FolderProps) {
   console.log("📂 Folder render - folderId:", folderId);
 
   const { currentWorkspace } = useWorkspace();
@@ -67,6 +65,8 @@ export function Folder({ folderId, onFolderChange }: FolderProps) {
   const loadFolderData = useCallback(async () => {
     if (!currentWorkspace?.id || !folderId) return;
 
+    // Clear old data immediately when folder changes
+    setFolderData(null);
     setIsLoading(true);
     setError(null);
 
@@ -154,11 +154,11 @@ export function Folder({ folderId, onFolderChange }: FolderProps) {
   const currentFolder = folderData?.folder || null;
 
   const handleFolderClick = (clickedFolderId: string) => {
-    onFolderChange?.(clickedFolderId);
+    navigateToFolder(clickedFolderId);
   };
 
   const handleBreadcrumbClick = (breadcrumbId: string | null) => {
-    onFolderChange?.(breadcrumbId);
+    navigateToFolder(breadcrumbId);
   };
 
   const handleFolderCreated = useCallback(
@@ -204,9 +204,10 @@ export function Folder({ folderId, onFolderChange }: FolderProps) {
   );
 
   return (
-    <div className="w-full h-full flex flex-col">
-      {/* Header Section */}
-      <div className="p-6 border-b border-neutral-200 dark:border-neutral-700">
+    <div className="w-full h-full">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 h-full overflow-hidden flex flex-col">
+        {/* Header Section */}
+        <div className="p-6 border-b border-neutral-200 dark:border-neutral-700">
         {/* Breadcrumbs */}
         <Breadcrumbs
           breadcrumbs={breadcrumbs}
@@ -302,6 +303,7 @@ export function Folder({ folderId, onFolderChange }: FolderProps) {
         parentFolderId={folderId || undefined}
         onFolderCreated={handleFolderCreated}
       />
+      </div>
     </div>
   );
 }

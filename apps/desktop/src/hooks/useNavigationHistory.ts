@@ -1,11 +1,15 @@
-import { useFolderNavigation } from "@/contexts/FolderNavigationContext";
+import { useNavigate, useLocation } from "react-router-dom";
 
 export function useNavigationHistory() {
-  const { goBack, canGoBack } = useFolderNavigation();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Check if we can go back (not on root dashboard)
+  const canGoBack = location.pathname !== "/dashboard" && location.pathname !== "/welcome";
 
   const handleBack = () => {
     console.log("🔙 Back button clicked");
-    goBack();
+    navigate(-1); // Use browser history
   };
 
   return {

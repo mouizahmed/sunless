@@ -1,6 +1,8 @@
 import { HashRouter as Router, Routes, Route } from "react-router-dom";
 import { useState, useEffect } from "react";
 import Welcome from "./pages/Welcome";
+import Home from "./pages/Home";
+import { Folder } from "./pages/Folder";
 import TopBar from "./components/TopBar";
 import { DashboardLayout } from "./components/DashboardLayout";
 import { SidebarProvider } from "./components/ui/sidebar";
@@ -69,7 +71,10 @@ function AppLayout() {
       <div className="overflow-hidden flex-1">
         <Routes>
           <Route path="/welcome" element={<Welcome />} />
-          <Route path="/dashboard/*" element={<DashboardLayout />} />
+          <Route path="/dashboard" element={<DashboardLayout />}>
+            <Route index element={<Home />} />
+            <Route path="folder/:folderId" element={<Folder />} />
+          </Route>
         </Routes>
       </div>
     </div>
