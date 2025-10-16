@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { Plus, FolderPlus, Upload } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -62,7 +63,7 @@ export function Folder() {
       : null;
 
   // Load folder data from cache or API
-  const loadFolderData = useCallback(async () => {
+  const loadFolderData = useCallback(async (signal: AbortSignal) => {
     if (!currentWorkspace?.id || !folderId) return;
 
     setIsLoading(true);
@@ -90,12 +91,41 @@ export function Folder() {
         setFolderData(null);
       }
 
+      // Check if request was cancelled before making API call
+      if (signal.aborted) return;
+
       // Step 2: ALWAYS fetch fresh data from API (even if cache exists)
       console.log("📡 Fetching fresh folder data from API...");
       const startTime = Date.now();
       const response = await makeAuthenticatedApiCall(
         `http://localhost:8080/api/folders/${folderId}?workspace_id=${currentWorkspace.id}`,
+        { signal }
       );
+
+      // Handle 404 - folder doesn't exist
+      if (response.status === 404) {
+        console.error("❌ Folder not found (404)");
+
+        // Show toast notification
+        toast.error("Folder not found", {
+          description: "This folder may have been deleted or you don't have access.",
+        });
+
+        // Remove this specific folder from cache
+        if (cacheKey) {
+          localStorage.removeItem(cacheKey);
+          console.log("🗑️ Removed folder from cache:", folderId);
+        }
+
+        // Trigger sidebar refresh to update folder list
+        if ((window as any).__reloadFolders) {
+          (window as any).__reloadFolders();
+        }
+
+        // Navigate back to home
+        navigateToFolder(null);
+        return;
+      }
 
       if (!response.ok) {
         throw new Error(`Failed to fetch folder data: ${response.status}`);
@@ -104,6 +134,9 @@ export function Folder() {
       const freshData = await response.json();
       const endTime = Date.now();
       console.log(`📡 Folder synced in ${endTime - startTime}ms`);
+
+      // Check if request was cancelled before updating state
+      if (signal.aborted) return;
 
       // Step 3: Update with fresh data
       setFolderData(freshData);
@@ -119,16 +152,29 @@ export function Folder() {
         );
       }
     } catch (error) {
+      // Ignore abort errors
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.log("🚫 Request cancelled");
+        return;
+      }
       console.error("Failed to load folder data:", error);
       setError(error instanceof Error ? error : new Error("Unknown error"));
     } finally {
-      setIsLoading(false);
+      if (!signal.aborted) {
+        setIsLoading(false);
+      }
     }
-  }, [currentWorkspace?.id, folderId, cacheKey]);
+  }, [currentWorkspace?.id, folderId, cacheKey, navigateToFolder]);
 
   // Load folder data when folderId or workspace changes
   useEffect(() => {
-    loadFolderData();
+    const abortController = new AbortController();
+    loadFolderData(abortController.signal);
+
+    // Cleanup: abort request if component unmounts or folderId changes
+    return () => {
+      abortController.abort();
+    };
   }, [loadFolderData]);
 
   console.log(

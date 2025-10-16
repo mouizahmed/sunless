@@ -339,6 +339,14 @@ export function FolderTree({ onCreateFolder }: FolderTreeComponentProps) {
     };
   }, [handleFolderCreated]);
 
+  // Expose loadFolders for cache invalidation scenarios (e.g., 404 errors)
+  useEffect(() => {
+    (window as any).__reloadFolders = loadFolders;
+    return () => {
+      delete (window as any).__reloadFolders;
+    };
+  }, [loadFolders]);
+
   return (
     <div className="mt-4">
       <div className="group px-2 py-1 flex items-center justify-between hover:bg-neutral-100/50 dark:hover:bg-neutral-800/50 rounded">

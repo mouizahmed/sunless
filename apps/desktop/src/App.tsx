@@ -1,5 +1,6 @@
 import { HashRouter as Router, Routes, Route } from "react-router-dom";
 import { useState, useEffect } from "react";
+import { Toaster } from "sonner";
 import Welcome from "./pages/Welcome";
 import Home from "./pages/Home";
 import { Folder } from "./pages/Folder";
@@ -90,6 +91,7 @@ function App() {
             <TopBarProvider>
               <SidebarProvider defaultOpen={true}>
                 <AppLayout />
+                <Toaster position="bottom-right" />
               </SidebarProvider>
             </TopBarProvider>
           </FolderNavigationProvider>
