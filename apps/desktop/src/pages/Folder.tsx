@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FolderContentItem } from "@/components/FolderContentItem";
-import { CreateFolderDialog } from "@/components/dialogs/CreateFolderDialog";
+import { CreateFolderDialog } from "@/components/dialog/CreateFolderDialog";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { useFolderNavigation } from "@/contexts/FolderNavigationContext";
@@ -208,101 +208,105 @@ export function Folder() {
       <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 h-full overflow-hidden flex flex-col">
         {/* Header Section */}
         <div className="p-6 border-b border-neutral-200 dark:border-neutral-700">
-        {/* Breadcrumbs */}
-        <Breadcrumbs
-          breadcrumbs={breadcrumbs}
-          onBreadcrumbClick={handleBreadcrumbClick}
-          className="mb-4"
-        />
+          {/* Breadcrumbs */}
+          <Breadcrumbs
+            breadcrumbs={breadcrumbs}
+            onBreadcrumbClick={handleBreadcrumbClick}
+            className="mb-4"
+          />
 
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">
-              {currentFolder?.name || "Loading..."}
-            </h1>
-          </div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">
+                {currentFolder?.name || "Loading..."}
+              </h1>
+            </div>
 
-          <div className="flex items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  size="sm"
-                  className="bg-violet-600 hover:bg-violet-700 text-white border-0"
+            <div className="flex items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="sm"
+                    className="bg-violet-600 hover:bg-violet-700 text-white border-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                    New
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  className="min-w-[160px] bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700"
                 >
-                  <Plus className="w-4 h-4" />
-                  New
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                className="min-w-[160px] bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700"
-              >
-                <DropdownMenuItem
-                  onClick={() => setShowCreateFolder(true)}
-                  className="cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-700 text-neutral-900 dark:text-neutral-100"
-                >
-                  <FolderPlus className="w-4 h-4 mr-2" />
-                  New Folder
-                </DropdownMenuItem>
-                <DropdownMenuItem className="cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-700 text-neutral-900 dark:text-neutral-100">
-                  <Upload className="w-4 h-4 mr-2" />
-                  Upload File
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <DropdownMenuItem
+                    onClick={() => setShowCreateFolder(true)}
+                    className="cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-700 text-neutral-900 dark:text-neutral-100"
+                  >
+                    <FolderPlus className="w-4 h-4 mr-2" />
+                    New Folder
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-700 text-neutral-900 dark:text-neutral-100">
+                    <Upload className="w-4 h-4 mr-2" />
+                    Upload File
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Content Section */}
-      <div className="flex-1 overflow-auto p-6">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-40">
-            <div className="text-neutral-500 dark:text-neutral-400">
-              Loading...
+        {/* Content Section */}
+        <div className="flex-1 overflow-auto p-6">
+          {isLoading ? (
+            <div className="flex items-center justify-center h-40">
+              <div className="text-neutral-500 dark:text-neutral-400">
+                Loading...
+              </div>
             </div>
-          </div>
-        ) : items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-40 text-center">
-            <div className="text-lg font-medium mb-2 text-neutral-900 dark:text-neutral-100">
-              This folder is empty
+          ) : items.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-40 text-center">
+              <div className="text-lg font-medium mb-2 text-neutral-900 dark:text-neutral-100">
+                This folder is empty
+              </div>
+              <div className="text-sm text-neutral-600 dark:text-neutral-400">
+                Create a new folder or upload files to get started
+              </div>
             </div>
-            <div className="text-sm text-neutral-600 dark:text-neutral-400">
-              Create a new folder or upload files to get started
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center h-40 text-center">
+              <div className="text-lg font-medium mb-2 text-red-600 dark:text-red-400">
+                Failed to load folder
+              </div>
+              <div className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+                {error.message}
+              </div>
+              <Button
+                onClick={() => loadFolderData()}
+                variant="outline"
+                size="sm"
+              >
+                Try Again
+              </Button>
             </div>
-          </div>
-        ) : error ? (
-          <div className="flex flex-col items-center justify-center h-40 text-center">
-            <div className="text-lg font-medium mb-2 text-red-600 dark:text-red-400">
-              Failed to load folder
+          ) : (
+            <div className="space-y-2">
+              {items.map((item) => (
+                <FolderContentItem
+                  key={item.id}
+                  item={item}
+                  onFolderClick={handleFolderClick}
+                />
+              ))}
             </div>
-            <div className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
-              {error.message}
-            </div>
-            <Button onClick={() => loadFolderData()} variant="outline" size="sm">
-              Try Again
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {items.map((item) => (
-              <FolderContentItem
-                key={item.id}
-                item={item}
-                onFolderClick={handleFolderClick}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+          )}
+        </div>
 
-      {/* Create Folder Dialog */}
-      <CreateFolderDialog
-        isOpen={showCreateFolder}
-        onClose={() => setShowCreateFolder(false)}
-        parentFolderId={folderId || undefined}
-        onFolderCreated={handleFolderCreated}
-      />
+        {/* Create Folder Dialog */}
+        <CreateFolderDialog
+          isOpen={showCreateFolder}
+          onClose={() => setShowCreateFolder(false)}
+          parentFolderId={folderId || undefined}
+          onFolderCreated={handleFolderCreated}
+        />
       </div>
     </div>
   );

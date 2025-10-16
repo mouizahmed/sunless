@@ -1,19 +1,18 @@
 import { useState } from "react";
-import { Sidebar as SidebarContainer, SidebarContent, SidebarFooter } from "./ui/sidebar";
-import { Button } from "./ui/button";
 import {
-  Home,
-  Users,
-  Calendar,
-  LucideIcon,
-} from "lucide-react";
+  Sidebar as SidebarContainer,
+  SidebarContent,
+  SidebarFooter,
+} from "./ui/sidebar";
+import { Button } from "./ui/button";
+import { Home, Users, Calendar, LucideIcon } from "lucide-react";
 import { useFolderNavigation } from "@/contexts/FolderNavigationContext";
-import { CreateWorkspaceDialog } from "./dialogs/CreateWorkspaceDialog";
-import { CreateFolderDialog } from "./dialogs/CreateFolderDialog";
-import { InviteMembersDialog } from "./dialogs/InviteMembersDialog";
+import { CreateWorkspaceDialog } from "./dialog/CreateWorkspaceDialog";
+import { CreateFolderDialog } from "./dialog/CreateFolderDialog";
+import { InviteMembersDialog } from "./dialog/InviteMembersDialog";
 import { FolderTree } from "./FolderTree";
-import { WorkspaceDropdown } from "./WorkspaceDropdown";
-import { UserProfileDropdown } from "./UserProfileDropdown";
+import { WorkspaceDropdown } from "./dropdown/WorkspaceDropdown";
+import { UserProfileDropdown } from "./dropdown/UserProfileDropdown";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWorkspace } from "@/hooks/useWorkspace";
 
@@ -96,9 +95,7 @@ export function Sidebar({ activeView }: SidebarProps) {
           ))}
         </div>
 
-        <FolderTree
-          onCreateFolder={() => setShowCreateFolderDialog(true)}
-        />
+        <FolderTree onCreateFolder={() => setShowCreateFolderDialog(true)} />
       </SidebarContent>
 
       {user && (

@@ -1,16 +1,11 @@
-import { Button } from "./ui/button";
-import {
-  Settings,
-  FileText,
-  LogOut,
-  CircleQuestionMark,
-} from "lucide-react";
+import { Button } from "../ui/button";
+import { Settings, FileText, LogOut, CircleQuestionMark } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
+} from "../ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
 
 export function UserProfileDropdown() {

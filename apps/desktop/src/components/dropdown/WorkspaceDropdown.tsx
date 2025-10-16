@@ -1,17 +1,12 @@
-import { Button } from "./ui/button";
-import {
-  ChevronDown,
-  Plus,
-  UserPlus,
-  Settings,
-} from "lucide-react";
+import { Button } from "../ui/button";
+import { ChevronDown, Plus, UserPlus, Settings } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
+} from "../ui/dropdown-menu";
 import { useWorkspace } from "@/hooks/useWorkspace";
 
 interface WorkspaceDropdownProps {
@@ -50,9 +45,7 @@ export function WorkspaceDropdown({
               </div>
               <div className="flex-1 min-w-0 text-left">
                 <p className="text-xs font-medium truncate text-neutral-900 dark:text-neutral-100">
-                  {currentWorkspace
-                    ? currentWorkspace.name
-                    : "No workspace"}
+                  {currentWorkspace ? currentWorkspace.name : "No workspace"}
                 </p>
                 <p className="text-xs text-violet-600 dark:text-violet-400 truncate">
                   {currentWorkspace
@@ -75,9 +68,7 @@ export function WorkspaceDropdown({
         >
           <div className="px-3 py-2 border-b border-neutral-700">
             <p className="text-sm font-medium text-white">
-              {workspaces.length > 0
-                ? "Switch Workspace"
-                : "Workspaces"}
+              {workspaces.length > 0 ? "Switch Workspace" : "Workspaces"}
             </p>
           </div>
           {workspaces.length > 0 ? (
