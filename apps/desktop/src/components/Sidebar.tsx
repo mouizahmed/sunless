@@ -5,8 +5,9 @@ import {
   SidebarFooter,
 } from "./ui/sidebar";
 import { Button } from "./ui/button";
-import { Home, Users, Calendar, LucideIcon } from "lucide-react";
+import { Home, Users, Calendar, FileText, LucideIcon } from "lucide-react";
 import { useFolderNavigation } from "@/contexts/FolderNavigationContext";
+import { useNavigate } from "react-router-dom";
 import { CreateWorkspaceDialog } from "./dialog/CreateWorkspaceDialog";
 import { CreateFolderDialog } from "./dialog/CreateFolderDialog";
 import { InviteMembersDialog } from "./dialog/InviteMembersDialog";
@@ -15,6 +16,7 @@ import { WorkspaceDropdown } from "./dropdown/WorkspaceDropdown";
 import { UserProfileDropdown } from "./dropdown/UserProfileDropdown";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { dispatchFolderCreated, type FolderCreatedDetail } from "@/events/folderEvents";
 
 interface NavItem {
   icon: LucideIcon;
@@ -48,7 +50,8 @@ interface SidebarProps {
 export function Sidebar({ activeView }: SidebarProps) {
   const { user } = useAuth();
   const { currentWorkspace } = useWorkspace();
-  const { currentFolderId, navigateToFolder } = useFolderNavigation();
+  const { navigateToFolder } = useFolderNavigation();
+  const navigate = useNavigate();
   const [showCreateWorkspaceDialog, setShowCreateWorkspaceDialog] =
     useState<boolean>(false);
   const [showInviteMembersDialog, setShowInviteMembersDialog] =
@@ -66,6 +69,12 @@ export function Sidebar({ activeView }: SidebarProps) {
       isActive: activeView === "home",
     },
     {
+      icon: FileText,
+      label: "All Files",
+      onClick: () => navigate("/dashboard/allfiles"),
+      isActive: activeView === "allfiles",
+    },
+    {
       icon: Users,
       label: "Shared with me",
       onClick: () => console.log("Shared with me clicked"),
@@ -79,11 +88,9 @@ export function Sidebar({ activeView }: SidebarProps) {
     },
   ];
 
-  const handleFolderCreated = (newFolder: any) => {
-    // Use the exposed function from FolderTreeSection
-    if ((window as any).__handleFolderCreated) {
-      (window as any).__handleFolderCreated(newFolder);
-    }
+  const handleFolderCreated = (newFolder: FolderCreatedDetail) => {
+    // Dispatch folder created event
+    dispatchFolderCreated(newFolder);
   };
 
   return (
@@ -123,7 +130,6 @@ export function Sidebar({ activeView }: SidebarProps) {
       <CreateFolderDialog
         isOpen={showCreateFolderDialog}
         onClose={() => setShowCreateFolderDialog(false)}
-        parentFolderId={currentFolderId || undefined}
         onFolderCreated={handleFolderCreated}
       />
     </SidebarContainer>

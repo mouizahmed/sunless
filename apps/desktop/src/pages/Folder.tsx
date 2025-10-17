@@ -1,32 +1,17 @@
 import { useState, useCallback, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { Plus, FolderPlus, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { Settings, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Skeleton } from "@/components/ui/skeleton";
 import { FolderContentItem } from "@/components/FolderContentItem";
-import { CreateFolderDialog } from "@/components/dialog/CreateFolderDialog";
-import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { SharingControls } from "@/components/SharingControls";
+import { ShareDialog } from "@/components/dialog/ShareDialog";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { useFolderNavigation } from "@/contexts/FolderNavigationContext";
 import { makeAuthenticatedApiCall } from "@/utils/firebase-api";
-
-interface FolderItem {
-  id: string;
-  name: string;
-  type: "folder" | "file";
-  size?: number;
-  length?: string;
-  created_at: string;
-  updated_at: string;
-  access_mode?: "workspace" | "invite_only";
-  parent_id?: string;
-}
+import { dispatchFoldersReload } from "@/events/folderEvents";
+import { type FolderItem } from "@/types/folder";
 
 export function Folder() {
   const { folderId } = useParams<{ folderId: string }>();
@@ -35,11 +20,13 @@ export function Folder() {
   console.log("📂 Folder render - folderId:", folderId);
 
   const { currentWorkspace } = useWorkspace();
-  const [showCreateFolder, setShowCreateFolder] = useState(false);
 
-  interface Breadcrumb {
-    id: string;
+  interface FolderMember {
+    user_id: string;
     name: string;
+    email: string;
+    avatar_url?: string;
+    is_owner: boolean;
   }
 
   interface FolderData {
@@ -47,14 +34,17 @@ export function Folder() {
       folders: FolderItem[];
       files: FolderItem[];
     };
-    breadcrumbs: Breadcrumb[];
     folder: FolderItem | null;
+    members: FolderMember[];
   }
 
   // Simple state-based cache
   const [folderData, setFolderData] = useState<FolderData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+
+  // Share dialog state
+  const [showShareDialog, setShowShareDialog] = useState(false);
 
   // Simple cache key for localStorage
   const cacheKey =
@@ -118,9 +108,7 @@ export function Folder() {
         }
 
         // Trigger sidebar refresh to update folder list
-        if ((window as any).__reloadFolders) {
-          (window as any).__reloadFolders();
-        }
+        dispatchFoldersReload();
 
         // Navigate back to home
         navigateToFolder(null);
@@ -187,11 +175,11 @@ export function Folder() {
   // Parse folder data
   const items: FolderItem[] = folderData
     ? [
-        ...folderData.contents.folders.map((f: any) => ({
+        ...folderData.contents.folders.map((f) => ({
           ...f,
           type: "folder" as const,
         })),
-        ...folderData.contents.files.map((f: any) => ({
+        ...folderData.contents.files.map((f) => ({
           ...f,
           type: "file" as const,
         })),
@@ -201,131 +189,246 @@ export function Folder() {
       )
     : [];
 
-  const breadcrumbs = folderData?.breadcrumbs || [];
   const currentFolder = folderData?.folder || null;
+  const members = folderData?.members || [];
 
   const handleFolderClick = (clickedFolderId: string) => {
     navigateToFolder(clickedFolderId);
   };
 
-  const handleBreadcrumbClick = (breadcrumbId: string | null) => {
-    navigateToFolder(breadcrumbId);
+  // Share dialog handlers
+  const handleAddUser = async (email: string, role: string) => {
+    if (!currentWorkspace?.id || !folderId) return;
+
+    try {
+      const response = await makeAuthenticatedApiCall(
+        `http://localhost:8080/api/folders/${folderId}/access`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspace_id: currentWorkspace.id,
+            email,
+            access_type: role,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to add user");
+      }
+
+      toast.success(`Added ${email} as ${role}`);
+
+      // Reload folder data to get updated members
+      const controller = new AbortController();
+      loadFolderData(controller.signal);
+    } catch (error) {
+      console.error("Failed to add user:", error);
+      toast.error("Failed to add user");
+    }
   };
 
-  const handleFolderCreated = useCallback(
-    async (newFolder?: any) => {
-      console.log("🔄 FolderView handleFolderCreated called with:", newFolder);
+  const handleRemoveUser = async (userId: string) => {
+    if (!currentWorkspace?.id || !folderId) return;
 
-      if (!newFolder) {
-        console.log("⚠️ FolderView no newFolder provided");
-        return;
+    try {
+      const response = await makeAuthenticatedApiCall(
+        `http://localhost:8080/api/folders/${folderId}/access/${userId}?workspace_id=${currentWorkspace.id}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to remove user");
       }
 
-      // Optimistically update the local folder view
-      setFolderData((currentData) => {
-        if (!currentData || !currentData.contents) {
-          return currentData;
+      toast.success("User removed");
+
+      // Reload folder data to get updated members
+      const controller = new AbortController();
+      loadFolderData(controller.signal);
+    } catch (error) {
+      console.error("Failed to remove user:", error);
+      toast.error("Failed to remove user");
+    }
+  };
+
+  const handleUpdateUserRole = async (userId: string, role: string) => {
+    if (!currentWorkspace?.id || !folderId) return;
+
+    try {
+      const response = await makeAuthenticatedApiCall(
+        `http://localhost:8080/api/folders/${folderId}/access/${userId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspace_id: currentWorkspace.id,
+            access_type: role,
+          }),
         }
+      );
 
-        const updatedData = {
-          ...currentData,
-          contents: {
-            ...currentData.contents,
-            folders: [...(currentData.contents.folders || []), newFolder],
-          },
-        };
-
-        // Update localStorage cache for this folder
-        if (cacheKey) {
-          localStorage.setItem(
-            cacheKey,
-            JSON.stringify({
-              data: updatedData,
-              timestamp: Date.now(),
-            }),
-          );
-        }
-
-        return updatedData;
-      });
-
-      // Notify sidebar to refresh (via window global)
-      if ((window as any).__handleFolderCreated) {
-        (window as any).__handleFolderCreated(newFolder);
+      if (!response.ok) {
+        throw new Error("Failed to update user role");
       }
 
-      console.log("✅ Folder added to view and sidebar notified!");
-    },
-    [cacheKey],
-  );
+      toast.success("Role updated");
+
+      // Reload folder data to get updated members
+      const controller = new AbortController();
+      loadFolderData(controller.signal);
+    } catch (error) {
+      console.error("Failed to update user role:", error);
+      toast.error("Failed to update user role");
+    }
+  };
+
+  const handleUpdateVisibility = async (visibility: string) => {
+    if (!currentWorkspace?.id || !folderId) return;
+
+    try {
+      const response = await makeAuthenticatedApiCall(
+        `http://localhost:8080/api/folders/${folderId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspace_id: currentWorkspace.id,
+            access_mode: visibility === "members_only" ? "invite_only" : "workspace",
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to update visibility");
+      }
+
+      toast.success("Visibility updated");
+
+      // Reload folder data
+      const controller = new AbortController();
+      loadFolderData(controller.signal);
+    } catch (error) {
+      console.error("Failed to update visibility:", error);
+      toast.error("Failed to update visibility");
+    }
+  };
+
+  const handleUpdateLinkAccess = async (access: string) => {
+    if (!currentWorkspace?.id || !folderId) return;
+
+    try {
+      const response = await makeAuthenticatedApiCall(
+        `http://localhost:8080/api/folders/${folderId}/link-access`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspace_id: currentWorkspace.id,
+            link_access: access,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to update link access");
+      }
+
+      toast.success("Link access updated");
+
+      // Reload folder data
+      const controller = new AbortController();
+      loadFolderData(controller.signal);
+    } catch (error) {
+      console.error("Failed to update link access:", error);
+      toast.error("Failed to update link access");
+    }
+  };
+
+  const handleCopyLink = () => {
+    const link = `${window.location.origin}/folder/${folderId}`;
+    navigator.clipboard.writeText(link);
+    toast.success("Link copied to clipboard");
+  };
 
   return (
     <div className="w-full h-full">
       <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 h-full overflow-hidden flex flex-col">
         {/* Header Section */}
         <div className="p-6 border-b border-neutral-200 dark:border-neutral-700">
-          {/* Breadcrumbs */}
-          <Breadcrumbs
-            breadcrumbs={breadcrumbs}
-            onBreadcrumbClick={handleBreadcrumbClick}
-            className="mb-4"
-          />
-
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">
-                {currentFolder?.name || "Loading..."}
-              </h1>
+          {!folderData && !error ? (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-7 w-[200px]" />
+              </div>
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-8 w-8 rounded" />
+                <div className="flex -space-x-2">
+                  <Skeleton className="h-8 w-8 rounded-full" />
+                  <Skeleton className="h-8 w-8 rounded-full" />
+                </div>
+                <Skeleton className="h-8 w-[120px] rounded" />
+              </div>
             </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">
+                  {currentFolder?.name}
+                </h1>
+                {currentFolder?.access_mode === "invite_only" && (
+                  <Lock className="w-5 h-5 text-neutral-400 dark:text-neutral-500" />
+                )}
+              </div>
 
-            <div className="flex items-center gap-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    size="sm"
-                    className="bg-violet-600 hover:bg-violet-700 text-white border-0"
-                  >
-                    <Plus className="w-4 h-4" />
-                    New
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  className="min-w-[160px] bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700"
+              <div className="flex items-center gap-2">
+                {/* Settings button */}
+                <Button
+                  variant="ghost"
+                  className="h-8 w-8 p-0 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100"
                 >
-                  <DropdownMenuItem
-                    onClick={() => setShowCreateFolder(true)}
-                    className="cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-700 text-neutral-900 dark:text-neutral-100"
-                  >
-                    <FolderPlus className="w-4 h-4 mr-2" />
-                    New Folder
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-700 text-neutral-900 dark:text-neutral-100">
-                    <Upload className="w-4 h-4 mr-2" />
-                    Upload File
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                  <Settings className="w-4 h-4" />
+                </Button>
+
+                {/* Sharing controls */}
+                <SharingControls
+                  collaborators={members.map((m) => ({
+                    id: m.user_id,
+                    name: m.name,
+                    email: m.email,
+                    avatar_url: m.avatar_url,
+                  }))}
+                  onManageAccess={() => setShowShareDialog(true)}
+                  onShare={() => setShowShareDialog(true)}
+                  onCopyLink={() => {
+                    // Copy link functionality
+                    const link = `${window.location.origin}/folder/${folderId}`;
+                    navigator.clipboard.writeText(link);
+                    toast.success("Link copied to clipboard");
+                  }}
+                />
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Content Section */}
         <div className="flex-1 overflow-auto p-6">
-          {isLoading ? (
-            <div className="flex items-center justify-center h-40">
-              <div className="text-neutral-500 dark:text-neutral-400">
-                Loading...
-              </div>
-            </div>
-          ) : items.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-40 text-center">
-              <div className="text-lg font-medium mb-2 text-neutral-900 dark:text-neutral-100">
-                This folder is empty
-              </div>
-              <div className="text-sm text-neutral-600 dark:text-neutral-400">
-                Create a new folder or upload files to get started
-              </div>
+          {!folderData && !error ? (
+            <div className="space-y-3">
+              {/* Loading skeleton for folder items */}
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex items-center gap-3 p-3 rounded-lg">
+                  <Skeleton className="h-10 w-10 rounded" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-[200px]" />
+                    <Skeleton className="h-3 w-[150px]" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : error ? (
             <div className="flex flex-col items-center justify-center h-40 text-center">
@@ -336,12 +439,24 @@ export function Folder() {
                 {error.message}
               </div>
               <Button
-                onClick={() => loadFolderData()}
+                onClick={() => {
+                  const controller = new AbortController();
+                  loadFolderData(controller.signal);
+                }}
                 variant="outline"
                 size="sm"
               >
                 Try Again
               </Button>
+            </div>
+          ) : items.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-40 text-center">
+              <div className="text-lg font-medium mb-2 text-neutral-900 dark:text-neutral-100">
+                This folder is empty
+              </div>
+              <div className="text-sm text-neutral-600 dark:text-neutral-400">
+                Create a new folder or upload files to get started
+              </div>
             </div>
           ) : (
             <div className="space-y-2">
@@ -355,15 +470,32 @@ export function Folder() {
             </div>
           )}
         </div>
-
-        {/* Create Folder Dialog */}
-        <CreateFolderDialog
-          isOpen={showCreateFolder}
-          onClose={() => setShowCreateFolder(false)}
-          parentFolderId={folderId || undefined}
-          onFolderCreated={handleFolderCreated}
-        />
       </div>
+
+      {/* Share Dialog */}
+      {currentFolder && (
+        <ShareDialog
+          isOpen={showShareDialog}
+          onClose={() => setShowShareDialog(false)}
+          itemType="folder"
+          itemName={currentFolder.name}
+          currentUsers={members.map((m) => ({
+            id: m.user_id,
+            name: m.name,
+            email: m.email,
+            avatar_url: m.avatar_url,
+            access_type: m.is_owner ? "owner" : "collaborator",
+          }))}
+          visibility={currentFolder.access_mode === "invite_only" ? "members_only" : "workspace"}
+          linkAccess="none"
+          onAddUser={handleAddUser}
+          onRemoveUser={handleRemoveUser}
+          onUpdateUserRole={handleUpdateUserRole}
+          onUpdateVisibility={handleUpdateVisibility}
+          onUpdateLinkAccess={handleUpdateLinkAccess}
+          onCopyLink={handleCopyLink}
+        />
+      )}
     </div>
   );
 }

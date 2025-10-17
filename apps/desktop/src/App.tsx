@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import Welcome from "./pages/Welcome";
 import Home from "./pages/Home";
 import { Folder } from "./pages/Folder";
+import { AllFiles } from "./pages/AllFiles";
 import TopBar from "./components/TopBar";
 import { DashboardLayout } from "./components/DashboardLayout";
 import { SidebarProvider } from "./components/ui/sidebar";
@@ -74,6 +75,7 @@ function AppLayout() {
           <Route path="/welcome" element={<Welcome />} />
           <Route path="/dashboard" element={<DashboardLayout />}>
             <Route index element={<Home />} />
+            <Route path="allfiles" element={<AllFiles />} />
             <Route path="folder/:folderId" element={<Folder />} />
           </Route>
         </Routes>

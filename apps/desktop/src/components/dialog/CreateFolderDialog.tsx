@@ -13,22 +13,13 @@ import { Switch } from "@/components/ui/switch";
 import { AccessSelector } from "@/components/ui/access-selector";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { makeAuthenticatedApiCall } from "@/utils/firebase-api";
-
-interface FolderData {
-  id: string;
-  name: string;
-  parent_id?: string;
-  workspace_id: string;
-  access_mode: "workspace" | "invite_only";
-  created_at: string;
-  updated_at: string;
-}
+import { type BaseFolder } from "@/types/folder";
 
 interface CreateFolderDialogProps {
   isOpen: boolean;
   onClose?: () => void;
   parentFolderId?: string;
-  onFolderCreated?: (newFolder: FolderData) => void;
+  onFolderCreated?: (newFolder: BaseFolder) => void;
 }
 
 export function CreateFolderDialog({
@@ -153,58 +144,74 @@ export function CreateFolderDialog({
 
           {/* Access Control Settings */}
           <div className="space-y-4 pt-2 border-t border-neutral-200 dark:border-neutral-700">
-            <div className="space-y-3">
-              <Label
-                htmlFor="access-mode"
-                className="text-sm font-medium text-neutral-900 dark:text-neutral-100"
-              >
-                Folder Access
-              </Label>
-              <AccessSelector
-                value={accessMode}
-                onChange={(value: string) =>
-                  setAccessMode(value as "workspace" | "invite_only")
-                }
-                type="folder-access"
-                disabled={creating}
-              />
-            </div>
-
             {parentFolderId ? (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
+              <>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <Label
+                        htmlFor="inherit-settings"
+                        className="text-sm font-medium text-neutral-900 dark:text-neutral-100"
+                      >
+                        Inherit from parent folder
+                      </Label>
+                      <div className="text-xs text-neutral-600 dark:text-neutral-400">
+                        Use the same access settings as the parent folder
+                      </div>
+                    </div>
+                    <Switch
+                      id="inherit-settings"
+                      checked={inheritSettings}
+                      onCheckedChange={(checked) => {
+                        console.log("🔄 Switch changed to:", checked);
+                        setInheritSettings(checked);
+                      }}
+                      disabled={creating}
+                    />
+                  </div>
+                  {inheritSettings && (
+                    <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-2 rounded">
+                      When enabled, this folder will inherit access settings from
+                      its parent folder.
+                    </div>
+                  )}
+                </div>
+
+                {!inheritSettings && (
+                  <div className="space-y-3">
                     <Label
-                      htmlFor="inherit-settings"
+                      htmlFor="access-mode"
                       className="text-sm font-medium text-neutral-900 dark:text-neutral-100"
                     >
-                      Inherit from parent folder
+                      Folder Access
                     </Label>
-                    <div className="text-xs text-neutral-600 dark:text-neutral-400">
-                      Use the same access settings as the parent folder
-                    </div>
-                  </div>
-                  <Switch
-                    id="inherit-settings"
-                    checked={inheritSettings}
-                    onCheckedChange={(checked) => {
-                      console.log("🔄 Switch changed to:", checked);
-                      setInheritSettings(checked);
-                    }}
-                    disabled={creating}
-                  />
-                </div>
-                {inheritSettings && (
-                  <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-2 rounded">
-                    When enabled, this folder will inherit access settings from
-                    its parent folder, overriding the access mode setting above.
+                    <AccessSelector
+                      value={accessMode}
+                      onChange={(value: string) =>
+                        setAccessMode(value as "workspace" | "invite_only")
+                      }
+                      type="folder-access"
+                      disabled={creating}
+                    />
                   </div>
                 )}
-              </div>
+              </>
             ) : (
-              <div className="text-xs text-neutral-500 dark:text-neutral-400">
-                📁 Debug: No parentFolderId provided - inheritance options
-                hidden
+              <div className="space-y-3">
+                <Label
+                  htmlFor="access-mode"
+                  className="text-sm font-medium text-neutral-900 dark:text-neutral-100"
+                >
+                  Folder Access
+                </Label>
+                <AccessSelector
+                  value={accessMode}
+                  onChange={(value: string) =>
+                    setAccessMode(value as "workspace" | "invite_only")
+                  }
+                  type="folder-access"
+                  disabled={creating}
+                />
               </div>
             )}
           </div>

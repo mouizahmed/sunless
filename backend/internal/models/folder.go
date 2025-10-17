@@ -43,10 +43,19 @@ type FolderContents struct {
 	Files   []File   `json:"files"`
 }
 
+type FolderUserAccess struct {
+	UserID    string  `json:"user_id"`
+	Name      string  `json:"name"`
+	Email     string  `json:"email"`
+	AvatarURL *string `json:"avatar_url"`
+	IsOwner   bool    `json:"is_owner"`
+}
+
 type FolderDataResponse struct {
-	Folder      *Folder        `json:"folder"`
-	Breadcrumbs []Breadcrumb   `json:"breadcrumbs"`
-	Contents    FolderContents `json:"contents"`
+	Folder      *Folder            `json:"folder"`
+	Breadcrumbs []Breadcrumb       `json:"breadcrumbs"`
+	Contents    FolderContents     `json:"contents"`
+	Members     []FolderUserAccess `json:"members"`
 	Stats       struct {
 		TotalFiles   int `json:"total_files"`
 		TotalFolders int `json:"total_folders"`

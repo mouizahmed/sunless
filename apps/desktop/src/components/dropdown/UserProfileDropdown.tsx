@@ -7,6 +7,7 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
+import { UserAvatar } from "@/components/UserAvatar";
 
 export function UserProfileDropdown() {
   const { user, logout, logoutEverywhere } = useAuth();
@@ -23,38 +24,7 @@ export function UserProfileDropdown() {
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
           >
             <div className="flex items-center gap-3 flex-1 min-w-0">
-              {user.picture ? (
-                <img
-                  src={user.picture}
-                  alt="Profile"
-                  className="w-8 h-8 rounded-full object-cover border-2 border-neutral-200 dark:border-neutral-600"
-                  referrerPolicy="no-referrer"
-                  crossOrigin="anonymous"
-                  onLoad={(e) => {
-                    const fallback = e.currentTarget.nextElementSibling;
-                    if (fallback) {
-                      (fallback as HTMLElement).style.display = "none";
-                    }
-                  }}
-                  onError={(e) => {
-                    e.currentTarget.style.display = "none";
-                    const fallback = e.currentTarget.nextElementSibling;
-                    if (fallback) {
-                      (fallback as HTMLElement).style.display = "flex";
-                    }
-                  }}
-                />
-              ) : null}
-              <div
-                className="w-8 h-8 rounded-full bg-neutral-300 dark:bg-neutral-600 flex items-center justify-center"
-                style={{
-                  display: user.picture ? "none" : "flex",
-                }}
-              >
-                <span className="text-sm font-medium text-neutral-600 dark:text-neutral-300">
-                  {user.name.charAt(0).toUpperCase()}
-                </span>
-              </div>
+              <UserAvatar name={user.name} avatarUrl={user.picture} size="md" />
               <div className="flex-1 min-w-0 text-left">
                 <p className="text-sm font-medium truncate text-neutral-900 dark:text-neutral-100">
                   {user.name}
@@ -72,7 +42,7 @@ export function UserProfileDropdown() {
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="start"
-          className="w-60 bg-neutral-800 border-neutral-700 text-white"
+          className="w-60"
         >
           <div className="px-3 py-2 border-b border-neutral-700">
             <p className="text-sm font-medium text-white">{user.name}</p>

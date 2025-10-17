@@ -11,6 +11,7 @@ import {
 import { useFolderNavigation } from "@/contexts/FolderNavigationContext";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { makeAuthenticatedApiCall } from "@/utils/firebase-api";
+import { onFolderCreated, onFoldersReload } from "@/events/folderEvents";
 
 interface FolderNode {
   id: string;
@@ -281,8 +282,21 @@ export function FolderTree({ onCreateFolder }: FolderTreeComponentProps) {
   );
 
   const folders = useMemo(() => {
-    return foldersData?.folders ? buildFolderTree(foldersData.folders) : [];
-  }, [foldersData?.folders, buildFolderTree]);
+    // Only show root-level folders (no parent_id)
+    if (!foldersData?.folders) return [];
+
+    return foldersData.folders
+      .filter(folder => !folder.parent_id)
+      .map(folder => ({
+        id: folder.id,
+        name: folder.name,
+        parent_id: folder.parent_id,
+        workspace_id: folder.workspace_id,
+        access_mode: folder.access_mode,
+        children: [],
+        expanded: false,
+      }));
+  }, [foldersData?.folders]);
 
   const handleFolderClick = (folderId: string) => {
     navigateToFolder(folderId);
@@ -331,20 +345,16 @@ export function FolderTree({ onCreateFolder }: FolderTreeComponentProps) {
     [cacheKey],
   );
 
-  // Expose handleFolderCreated to parent via ref or callback prop
+  // Listen for folder created events
   useEffect(() => {
-    (window as any).__handleFolderCreated = handleFolderCreated;
-    return () => {
-      delete (window as any).__handleFolderCreated;
-    };
+    const unsubscribe = onFolderCreated(handleFolderCreated);
+    return unsubscribe;
   }, [handleFolderCreated]);
 
-  // Expose loadFolders for cache invalidation scenarios (e.g., 404 errors)
+  // Listen for folders reload events
   useEffect(() => {
-    (window as any).__reloadFolders = loadFolders;
-    return () => {
-      delete (window as any).__reloadFolders;
-    };
+    const unsubscribe = onFoldersReload(loadFolders);
+    return unsubscribe;
   }, [loadFolders]);
 
   return (

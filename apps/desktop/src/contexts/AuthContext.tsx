@@ -143,7 +143,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } else {
       // Redirect unauthenticated users to welcome page
-      if (location.pathname === "/" || location.pathname === "/dashboard") {
+      // Check if on any dashboard route (including nested routes)
+      if (location.pathname === "/" || location.pathname.startsWith("/dashboard")) {
         navigate("/welcome", { replace: true });
       }
     }

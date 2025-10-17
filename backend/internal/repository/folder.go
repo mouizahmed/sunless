@@ -56,7 +56,7 @@ func (r *FolderRepository) populateTagsForFolders(folders []models.Folder) error
 
 func (r *FolderRepository) GetFolderByID(folderID, userID, workspaceID string) (*models.Folder, error) {
 	query := `
-		SELECT id, name, parent_id, user_id, workspace_id, created_at, updated_at, deleted_at
+		SELECT id, name, parent_id, user_id, workspace_id, access_mode, inherit_settings, created_at, updated_at, deleted_at
 		FROM folders
 		WHERE id = $1 AND user_id = $2 AND workspace_id = $3 AND deleted_at IS NULL
 	`
@@ -68,6 +68,8 @@ func (r *FolderRepository) GetFolderByID(folderID, userID, workspaceID string) (
 		&folder.ParentID,
 		&folder.UserID,
 		&folder.WorkspaceID,
+		&folder.AccessMode,
+		&folder.InheritSettings,
 		&folder.CreatedAt,
 		&folder.UpdatedAt,
 		&folder.DeletedAt,
@@ -238,11 +240,21 @@ func (r *FolderRepository) GetFolderData(folderID, userID, workspaceID string) (
 		return nil, err
 	}
 
+	// Get users with access to this folder
+	members := []models.FolderUserAccess{}
+	if folderID != "" && folder != nil {
+		members, err = r.GetFolderAccessUsers(folderID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// Build response
 	response := &models.FolderDataResponse{
 		Folder:      folder, // nil for root/dashboard, actual folder object for subfolders
 		Breadcrumbs: breadcrumbs,
 		Contents:    *contents,
+		Members:     members,
 		Stats: struct {
 			TotalFiles   int `json:"total_files"`
 			TotalFolders int `json:"total_folders"`
@@ -316,7 +328,7 @@ func (r *FolderRepository) UpdateFolder(folderID, name, userID, workspaceID stri
 		UPDATE folders
 		SET name = $1, updated_at = NOW()
 		WHERE id = $2 AND user_id = $3 AND workspace_id = $4 AND deleted_at IS NULL
-		RETURNING id, name, parent_id, user_id, workspace_id, created_at, updated_at
+		RETURNING id, name, parent_id, user_id, workspace_id, access_mode, inherit_settings, created_at, updated_at
 	`
 
 	var folder models.Folder
@@ -326,6 +338,8 @@ func (r *FolderRepository) UpdateFolder(folderID, name, userID, workspaceID stri
 		&folder.ParentID,
 		&folder.UserID,
 		&folder.WorkspaceID,
+		&folder.AccessMode,
+		&folder.InheritSettings,
 		&folder.CreatedAt,
 		&folder.UpdatedAt,
 	)
@@ -468,7 +482,7 @@ func (r *FolderRepository) MoveFolder(folderID, newParentID, userID, workspaceID
 		UPDATE folders
 		SET parent_id = $1, updated_at = NOW()
 		WHERE id = $2 AND user_id = $3 AND workspace_id = $4 AND deleted_at IS NULL
-		RETURNING id, name, parent_id, user_id, workspace_id, created_at, updated_at
+		RETURNING id, name, parent_id, user_id, workspace_id, access_mode, inherit_settings, created_at, updated_at
 	`
 
 	var folder models.Folder
@@ -478,6 +492,8 @@ func (r *FolderRepository) MoveFolder(folderID, newParentID, userID, workspaceID
 		&folder.ParentID,
 		&folder.UserID,
 		&folder.WorkspaceID,
+		&folder.AccessMode,
+		&folder.InheritSettings,
 		&folder.CreatedAt,
 		&folder.UpdatedAt,
 	)
@@ -533,6 +549,61 @@ func (r *FolderRepository) validateNoCircularReference(folderID, newParentID, us
 	}
 
 	return nil
+}
+
+// GetFolderAccessUsers returns all users with access to a folder (owner + shared users)
+func (r *FolderRepository) GetFolderAccessUsers(folderID string) ([]models.FolderUserAccess, error) {
+	// First get the owner
+	var ownerID string
+	err := r.db.QueryRow(`
+		SELECT user_id FROM folders
+		WHERE id = $1 AND deleted_at IS NULL
+	`, folderID).Scan(&ownerID)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get folder owner: %w", err)
+	}
+
+	// Get owner details
+	var owner models.FolderUserAccess
+	err = r.db.QueryRow(`
+		SELECT id, name, email, avatar_url
+		FROM users
+		WHERE id = $1 AND deleted_at IS NULL
+	`, ownerID).Scan(&owner.UserID, &owner.Name, &owner.Email, &owner.AvatarURL)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get owner details: %w", err)
+	}
+	owner.IsOwner = true
+
+	// Get all users with explicit access via folder_access table
+	query := `
+		SELECT u.id, u.name, u.email, u.avatar_url
+		FROM folder_access fa
+		JOIN users u ON fa.user_id = u.id
+		WHERE fa.folder_id = $1 AND u.deleted_at IS NULL
+		ORDER BY fa.created_at ASC
+	`
+
+	rows, err := r.db.Query(query, folderID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get folder access users: %w", err)
+	}
+	defer rows.Close()
+
+	members := []models.FolderUserAccess{owner} // Owner is always first
+	for rows.Next() {
+		var member models.FolderUserAccess
+		err := rows.Scan(&member.UserID, &member.Name, &member.Email, &member.AvatarURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan folder access user: %w", err)
+		}
+		member.IsOwner = false
+		members = append(members, member)
+	}
+
+	return members, nil
 }
 
 // Access Control Methods

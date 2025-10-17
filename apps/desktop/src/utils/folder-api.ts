@@ -1,4 +1,5 @@
 import { makeAuthenticatedApiCall } from "@/utils/firebase-api";
+import { type SharedFolder } from "@/types/folder";
 
 const API_BASE = "http://localhost:8080/api";
 
@@ -27,7 +28,7 @@ export interface FolderMember {
   user_id: string;
   email: string;
   name: string;
-  access_type: string;
+  access_type: "owner" | "full" | "edit" | "view";
   granted_by: string;
   granted_at: string;
 }
@@ -83,7 +84,7 @@ export async function updateFolderSettings(folderId: string, settings: UpdateFol
 }
 
 // Get shared folders for "Shared with me" tab
-export async function getSharedFolders(): Promise<any[]> {
+export async function getSharedFolders(): Promise<SharedFolder[]> {
   const response = await makeAuthenticatedApiCall(`${API_BASE}/folders/shared`);
 
   if (!response.ok) {
