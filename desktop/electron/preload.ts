@@ -43,5 +43,9 @@ contextBridge.exposeInMainWorld('windowControl', {
 
   onDragOffset: (callback: (offset: { x: number; y: number }) => void) => {
     ipcRenderer.on('drag-offset', (_event, offset) => callback(offset))
+  },
+
+  onFocusInput: (callback: () => void) => {
+    ipcRenderer.on('focus-input', () => callback())
   }
 })

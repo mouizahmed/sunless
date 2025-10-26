@@ -8,11 +8,17 @@ function App() {
   const [isDragging, setIsDragging] = useState(false)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const overlayRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     // Listen for drag offset from main process
     window.windowControl?.onDragOffset((offset) => {
       setDragOffset(offset)
+    })
+
+    // Listen for focus input event from main process
+    window.windowControl?.onFocusInput(() => {
+      inputRef.current?.focus()
     })
   }, [])
 
@@ -51,6 +57,7 @@ function App() {
     >
       <div className="flex-1">
         <Input
+          ref={inputRef}
           type="text"
           placeholder="Ask me anything..."
           className="bg-white/10 border-white/20 text-white placeholder:text-white/50 h-8 text-sm"

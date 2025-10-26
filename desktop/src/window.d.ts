@@ -6,6 +6,7 @@ interface WindowControl {
   setIgnoreMouseEvents: (ignore: boolean) => void
   toggleVisibility: () => void
   onDragOffset: (callback: (offset: { x: number; y: number }) => void) => void
+  onFocusInput: (callback: () => void) => void
 }
 
 interface Window {

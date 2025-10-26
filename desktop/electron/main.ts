@@ -80,6 +80,11 @@ function createWindow() {
   win.webContents.on('did-finish-load', () => {
     registerKeyboardShortcuts()
   })
+
+  // Focus input when window is shown
+  win.on('show', () => {
+    win?.webContents.send('focus-input')
+  })
 }
 
 // Keyboard shortcuts for window movement
@@ -152,6 +157,7 @@ function registerKeyboardShortcuts() {
           win.hide()
         } else {
           win.show()
+          // Focus will be triggered by the 'show' event listener
         }
       })
       console.log(`Registered toggleVisibility: ${shortcuts.toggleVisibility}`)
