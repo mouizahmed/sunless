@@ -28,8 +28,8 @@ let win: BrowserWindow | null
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 350,
-    height: 120,
+    width: 600,
+    height: 50,
     frame: false,                    // No title bar or window frame
     transparent: true,               // Transparent background
     hasShadow: false,                // No shadow
@@ -114,7 +114,8 @@ function registerKeyboardShortcuts() {
     moveDown: () => {
       if (!win || !win.isVisible()) return
       const [currentX, currentY] = win.getPosition()
-      win.setPosition(currentX, currentY + moveIncrement)
+      const maxY = height - win.getSize()[1]
+      win.setPosition(currentX, Math.min(maxY, currentY + moveIncrement))
     },
     moveLeft: () => {
       if (!win || !win.isVisible()) return
@@ -124,7 +125,8 @@ function registerKeyboardShortcuts() {
     moveRight: () => {
       if (!win || !win.isVisible()) return
       const [currentX, currentY] = win.getPosition()
-      win.setPosition(currentX + moveIncrement, currentY)
+      const maxX = width - win.getSize()[0]
+      win.setPosition(Math.min(maxX, currentX + moveIncrement), currentY)
     },
   }
 

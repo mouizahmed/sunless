@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Camera, Paperclip, History, Settings, GripVertical } from 'lucide-react'
 import './App.css'
 
 function App() {
@@ -42,27 +45,54 @@ function App() {
 
   return (
     <div
-      className="overlay-container"
+      className="w-full h-full flex items-center gap-2 px-3 bg-black/40 backdrop-blur-xl rounded-xl"
       ref={overlayRef}
       onMouseDown={handleMouseDown}
     >
-      <div className="overlay-content">
-        <div className="drag-handle">
-          <span className="drag-indicator">☰</span>
-          <span className="title">Sunless Overlay</span>
-        </div>
-
-        <div className="status">
-          <div className="status-item">
-            <span className="status-label">Mode:</span>
-            <span className="status-value active">Click-through</span>
-          </div>
-          <div className="status-item">
-            <span className="status-label">Status:</span>
-            <span className="status-value active">Hidden from screenshare</span>
-          </div>
-        </div>
+      <div className="flex-1">
+        <Input
+          type="text"
+          placeholder="Ask me anything..."
+          className="bg-white/10 border-white/20 text-white placeholder:text-white/50 h-8 text-sm"
+        />
       </div>
+
+      <div className="flex gap-1.5">
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8 rounded-full bg-white/10 hover:bg-white/20 text-white hover:text-white"
+          title="Screenshot"
+        >
+          <Camera className="h-4 w-4" />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8 rounded-full bg-white/10 hover:bg-white/20 text-white hover:text-white"
+          title="Attach"
+        >
+          <Paperclip className="h-4 w-4" />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8 rounded-full bg-white/10 hover:bg-white/20 text-white hover:text-white"
+          title="History"
+        >
+          <History className="h-4 w-4" />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8 rounded-full bg-white/10 hover:bg-white/20 text-white hover:text-white"
+          title="Settings"
+        >
+          <Settings className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <GripVertical className="h-4 w-4 text-white/40" />
     </div>
   )
 }
