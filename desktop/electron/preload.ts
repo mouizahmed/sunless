@@ -22,3 +22,26 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   // You can expose other APTs you need here.
   // ...
 })
+
+// Expose window control API
+contextBridge.exposeInMainWorld('windowControl', {
+  startDrag: (mouseX: number, mouseY: number) => {
+    ipcRenderer.send('window-drag-start', { mouseX, mouseY })
+  },
+
+  moveDrag: (mouseX: number, mouseY: number, offsetX: number, offsetY: number) => {
+    ipcRenderer.send('window-drag-move', { mouseX, mouseY, offsetX, offsetY })
+  },
+
+  setIgnoreMouseEvents: (ignore: boolean) => {
+    ipcRenderer.send('set-ignore-mouse-events', ignore)
+  },
+
+  toggleVisibility: () => {
+    ipcRenderer.send('toggle-visibility')
+  },
+
+  onDragOffset: (callback: (offset: { x: number; y: number }) => void) => {
+    ipcRenderer.on('drag-offset', (_event, offset) => callback(offset))
+  }
+})

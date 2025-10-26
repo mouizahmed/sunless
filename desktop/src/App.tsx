@@ -1,34 +1,69 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/electron-vite.animate.svg'
+import { useState, useEffect, useRef } from 'react'
 import './App.css'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+  const overlayRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    // Listen for drag offset from main process
+    window.windowControl?.onDragOffset((offset) => {
+      setDragOffset(offset)
+    })
+  }, [])
+
+  // Global mouse move and up handlers
+  useEffect(() => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return
+      window.windowControl?.moveDrag(e.screenX, e.screenY, dragOffset.x, dragOffset.y)
+    }
+
+    const handleGlobalMouseUp = () => {
+      setIsDragging(false)
+    }
+
+    if (isDragging) {
+      document.addEventListener('mousemove', handleGlobalMouseMove)
+      document.addEventListener('mouseup', handleGlobalMouseUp)
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleGlobalMouseMove)
+      document.removeEventListener('mouseup', handleGlobalMouseUp)
+    }
+  }, [isDragging, dragOffset])
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true)
+    window.windowControl?.startDrag(e.screenX, e.screenY)
+  }
 
   return (
-    <>
-      <div>
-        <a href="https://electron-vite.github.io" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div
+      className="overlay-container"
+      ref={overlayRef}
+      onMouseDown={handleMouseDown}
+    >
+      <div className="overlay-content">
+        <div className="drag-handle">
+          <span className="drag-indicator">☰</span>
+          <span className="title">Sunless Overlay</span>
+        </div>
+
+        <div className="status">
+          <div className="status-item">
+            <span className="status-label">Mode:</span>
+            <span className="status-value active">Click-through</span>
+          </div>
+          <div className="status-item">
+            <span className="status-label">Status:</span>
+            <span className="status-value active">Hidden from screenshare</span>
+          </div>
+        </div>
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    </div>
   )
 }
 
