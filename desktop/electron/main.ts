@@ -92,10 +92,10 @@ function registerKeyboardShortcuts() {
 
   // Movement shortcuts
   const shortcuts = {
-    moveUp: isMac ? 'Alt+Up' : 'Ctrl+Up',
-    moveDown: isMac ? 'Alt+Down' : 'Ctrl+Down',
-    moveLeft: isMac ? 'Alt+Left' : 'Ctrl+Left',
-    moveRight: isMac ? 'Alt+Right' : 'Ctrl+Right',
+    moveUp: isMac ? 'Cmd+Up' : 'Ctrl+Up',
+    moveDown: isMac ? 'Cmd+Down' : 'Ctrl+Down',
+    moveLeft: isMac ? 'Cmd+Left' : 'Ctrl+Left',
+    moveRight: isMac ? 'Cmd+Right' : 'Ctrl+Right',
     toggleVisibility: isMac ? 'Cmd+\\' : 'Ctrl+\\',
   }
 
