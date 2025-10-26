@@ -1,9 +1,7 @@
 import { app, BrowserWindow, ipcMain, screen, globalShortcut } from 'electron'
-import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
-const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // The built directory structure
@@ -60,10 +58,6 @@ function createWindow() {
     win.setAlwaysOnTop(true, 'screen-saver')
   }
 
-  // Handle window dragging via IPC
-  let isDragging = false
-  let dragOffset = { x: 0, y: 0 }
-
   // Test active push message to Renderer-process.
   win.webContents.on('did-finish-load', () => {
     win?.webContents.send('main-process-message', (new Date).toLocaleString())
@@ -91,11 +85,6 @@ function createWindow() {
 function registerKeyboardShortcuts() {
   if (!win) return
 
-  // Calculate movement increment (10% of screen size)
-  const primaryDisplay = screen.getPrimaryDisplay()
-  const { width, height } = primaryDisplay.workAreaSize
-  const moveIncrement = Math.floor(Math.min(width, height) * 0.1)
-
   const isMac = process.platform === 'darwin'
 
   // Unregister all existing shortcuts first
@@ -114,23 +103,37 @@ function registerKeyboardShortcuts() {
     moveUp: () => {
       if (!win || !win.isVisible()) return
       const [currentX, currentY] = win.getPosition()
-      win.setPosition(currentX, Math.max(0, currentY - moveIncrement))
+      // Get the display that contains the current window position
+      const currentDisplay = screen.getDisplayNearestPoint({ x: currentX, y: currentY })
+      const moveIncrement = Math.floor(Math.min(currentDisplay.workAreaSize.width, currentDisplay.workAreaSize.height) * 0.1)
+      const minY = currentDisplay.workArea.y
+      win.setPosition(currentX, Math.max(minY, currentY - moveIncrement))
     },
     moveDown: () => {
       if (!win || !win.isVisible()) return
       const [currentX, currentY] = win.getPosition()
-      const maxY = height - win.getSize()[1]
+      // Get the display that contains the current window position
+      const currentDisplay = screen.getDisplayNearestPoint({ x: currentX, y: currentY })
+      const moveIncrement = Math.floor(Math.min(currentDisplay.workAreaSize.width, currentDisplay.workAreaSize.height) * 0.1)
+      const maxY = currentDisplay.workArea.y + currentDisplay.workArea.height - win.getSize()[1]
       win.setPosition(currentX, Math.min(maxY, currentY + moveIncrement))
     },
     moveLeft: () => {
       if (!win || !win.isVisible()) return
       const [currentX, currentY] = win.getPosition()
-      win.setPosition(Math.max(0, currentX - moveIncrement), currentY)
+      // Get the display that contains the current window position
+      const currentDisplay = screen.getDisplayNearestPoint({ x: currentX, y: currentY })
+      const moveIncrement = Math.floor(Math.min(currentDisplay.workAreaSize.width, currentDisplay.workAreaSize.height) * 0.1)
+      const minX = currentDisplay.workArea.x
+      win.setPosition(Math.max(minX, currentX - moveIncrement), currentY)
     },
     moveRight: () => {
       if (!win || !win.isVisible()) return
       const [currentX, currentY] = win.getPosition()
-      const maxX = width - win.getSize()[0]
+      // Get the display that contains the current window position
+      const currentDisplay = screen.getDisplayNearestPoint({ x: currentX, y: currentY })
+      const moveIncrement = Math.floor(Math.min(currentDisplay.workAreaSize.width, currentDisplay.workAreaSize.height) * 0.1)
+      const maxX = currentDisplay.workArea.x + currentDisplay.workArea.width - win.getSize()[0]
       win.setPosition(Math.min(maxX, currentX + moveIncrement), currentY)
     },
   }
@@ -186,7 +189,7 @@ app.on('activate', () => {
 })
 
 // IPC handlers for window control
-ipcMain.on('window-drag-start', (event, { mouseX, mouseY }) => {
+ipcMain.on('window-drag-start', (_event, { mouseX, mouseY }) => {
   if (!win) return
   const [winX, winY] = win.getPosition()
   win.webContents.send('drag-offset', {
@@ -195,12 +198,12 @@ ipcMain.on('window-drag-start', (event, { mouseX, mouseY }) => {
   })
 })
 
-ipcMain.on('window-drag-move', (event, { mouseX, mouseY, offsetX, offsetY }) => {
+ipcMain.on('window-drag-move', (_event, { mouseX, mouseY, offsetX, offsetY }) => {
   if (!win) return
   win.setPosition(mouseX - offsetX, mouseY - offsetY)
 })
 
-ipcMain.on('set-ignore-mouse-events', (event, ignore: boolean) => {
+ipcMain.on('set-ignore-mouse-events', (_event, ignore: boolean) => {
   if (!win) return
   win.setIgnoreMouseEvents(ignore, { forward: true })
 })
