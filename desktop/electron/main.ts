@@ -78,67 +78,67 @@ function createWindow() {
   // Focus input when window is shown
   win.on('show', () => {
     win?.webContents.send('focus-input')
+    registerMovementShortcuts()
+  })
+
+  // Unregister movement shortcuts when window is hidden
+  win.on('hide', () => {
+    unregisterMovementShortcuts()
   })
 }
 
-// Keyboard shortcuts for window movement
-function registerKeyboardShortcuts() {
-  if (!win) return
+// Define shortcuts and movement actions at module level
+const isMac = process.platform === 'darwin'
 
-  const isMac = process.platform === 'darwin'
+const shortcuts = {
+  moveUp: isMac ? 'Cmd+Up' : 'Ctrl+Up',
+  moveDown: isMac ? 'Cmd+Down' : 'Ctrl+Down',
+  moveLeft: isMac ? 'Cmd+Left' : 'Ctrl+Left',
+  moveRight: isMac ? 'Cmd+Right' : 'Ctrl+Right',
+  toggleVisibility: isMac ? 'Cmd+\\' : 'Ctrl+\\',
+}
 
-  // Unregister all existing shortcuts first
-  globalShortcut.unregisterAll()
+const movementActions = {
+  moveUp: () => {
+    if (!win || !win.isVisible()) return
+    const [currentX, currentY] = win.getPosition()
+    // Get the display that contains the current window position
+    const currentDisplay = screen.getDisplayNearestPoint({ x: currentX, y: currentY })
+    const moveIncrement = Math.floor(Math.min(currentDisplay.workAreaSize.width, currentDisplay.workAreaSize.height) * 0.1)
+    const minY = currentDisplay.workArea.y
+    win.setPosition(currentX, Math.max(minY, currentY - moveIncrement))
+  },
+  moveDown: () => {
+    if (!win || !win.isVisible()) return
+    const [currentX, currentY] = win.getPosition()
+    // Get the display that contains the current window position
+    const currentDisplay = screen.getDisplayNearestPoint({ x: currentX, y: currentY })
+    const moveIncrement = Math.floor(Math.min(currentDisplay.workAreaSize.width, currentDisplay.workAreaSize.height) * 0.1)
+    const maxY = currentDisplay.workArea.y + currentDisplay.workArea.height - win.getSize()[1]
+    win.setPosition(currentX, Math.min(maxY, currentY + moveIncrement))
+  },
+  moveLeft: () => {
+    if (!win || !win.isVisible()) return
+    const [currentX, currentY] = win.getPosition()
+    // Get the display that contains the current window position
+    const currentDisplay = screen.getDisplayNearestPoint({ x: currentX, y: currentY })
+    const moveIncrement = Math.floor(Math.min(currentDisplay.workAreaSize.width, currentDisplay.workAreaSize.height) * 0.1)
+    const minX = currentDisplay.workArea.x
+    win.setPosition(Math.max(minX, currentX - moveIncrement), currentY)
+  },
+  moveRight: () => {
+    if (!win || !win.isVisible()) return
+    const [currentX, currentY] = win.getPosition()
+    // Get the display that contains the current window position
+    const currentDisplay = screen.getDisplayNearestPoint({ x: currentX, y: currentY })
+    const moveIncrement = Math.floor(Math.min(currentDisplay.workAreaSize.width, currentDisplay.workAreaSize.height) * 0.1)
+    const maxX = currentDisplay.workArea.x + currentDisplay.workArea.width - win.getSize()[0]
+    win.setPosition(Math.min(maxX, currentX + moveIncrement), currentY)
+  },
+}
 
-  // Movement shortcuts
-  const shortcuts = {
-    moveUp: isMac ? 'Cmd+Up' : 'Ctrl+Up',
-    moveDown: isMac ? 'Cmd+Down' : 'Ctrl+Down',
-    moveLeft: isMac ? 'Cmd+Left' : 'Ctrl+Left',
-    moveRight: isMac ? 'Cmd+Right' : 'Ctrl+Right',
-    toggleVisibility: isMac ? 'Cmd+\\' : 'Ctrl+\\',
-  }
-
-  const movementActions = {
-    moveUp: () => {
-      if (!win || !win.isVisible()) return
-      const [currentX, currentY] = win.getPosition()
-      // Get the display that contains the current window position
-      const currentDisplay = screen.getDisplayNearestPoint({ x: currentX, y: currentY })
-      const moveIncrement = Math.floor(Math.min(currentDisplay.workAreaSize.width, currentDisplay.workAreaSize.height) * 0.1)
-      const minY = currentDisplay.workArea.y
-      win.setPosition(currentX, Math.max(minY, currentY - moveIncrement))
-    },
-    moveDown: () => {
-      if (!win || !win.isVisible()) return
-      const [currentX, currentY] = win.getPosition()
-      // Get the display that contains the current window position
-      const currentDisplay = screen.getDisplayNearestPoint({ x: currentX, y: currentY })
-      const moveIncrement = Math.floor(Math.min(currentDisplay.workAreaSize.width, currentDisplay.workAreaSize.height) * 0.1)
-      const maxY = currentDisplay.workArea.y + currentDisplay.workArea.height - win.getSize()[1]
-      win.setPosition(currentX, Math.min(maxY, currentY + moveIncrement))
-    },
-    moveLeft: () => {
-      if (!win || !win.isVisible()) return
-      const [currentX, currentY] = win.getPosition()
-      // Get the display that contains the current window position
-      const currentDisplay = screen.getDisplayNearestPoint({ x: currentX, y: currentY })
-      const moveIncrement = Math.floor(Math.min(currentDisplay.workAreaSize.width, currentDisplay.workAreaSize.height) * 0.1)
-      const minX = currentDisplay.workArea.x
-      win.setPosition(Math.max(minX, currentX - moveIncrement), currentY)
-    },
-    moveRight: () => {
-      if (!win || !win.isVisible()) return
-      const [currentX, currentY] = win.getPosition()
-      // Get the display that contains the current window position
-      const currentDisplay = screen.getDisplayNearestPoint({ x: currentX, y: currentY })
-      const moveIncrement = Math.floor(Math.min(currentDisplay.workAreaSize.width, currentDisplay.workAreaSize.height) * 0.1)
-      const maxX = currentDisplay.workArea.x + currentDisplay.workArea.width - win.getSize()[0]
-      win.setPosition(Math.min(maxX, currentX + moveIncrement), currentY)
-    },
-  }
-
-  // Register movement shortcuts
+// Register movement shortcuts
+function registerMovementShortcuts() {
   Object.keys(movementActions).forEach((action) => {
     const keybind = shortcuts[action as keyof typeof shortcuts]
     if (keybind) {
@@ -150,8 +150,30 @@ function registerKeyboardShortcuts() {
       }
     }
   })
+}
 
-  // Register toggle visibility shortcut
+// Unregister movement shortcuts
+function unregisterMovementShortcuts() {
+  Object.keys(movementActions).forEach((action) => {
+    const keybind = shortcuts[action as keyof typeof shortcuts]
+    if (keybind && globalShortcut.isRegistered(keybind)) {
+      globalShortcut.unregister(keybind)
+      console.log(`Unregistered ${action}: ${keybind}`)
+    }
+  })
+}
+
+// Keyboard shortcuts for window movement
+function registerKeyboardShortcuts() {
+  if (!win) return
+
+  // Unregister all existing shortcuts first
+  globalShortcut.unregisterAll()
+
+  // Register movement shortcuts (window is visible by default)
+  registerMovementShortcuts()
+
+  // Register toggle visibility shortcut (always active)
   if (shortcuts.toggleVisibility) {
     try {
       globalShortcut.register(shortcuts.toggleVisibility, () => {
