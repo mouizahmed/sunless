@@ -28,7 +28,7 @@ let shouldRestoreMainWindowAfterScreenshot = false
 function createWindow() {
   win = new BrowserWindow({
     width: 600,
-    height: 50,
+    height: 60,
     frame: false,
     transparent: true,
     hasShadow: false,
@@ -45,7 +45,7 @@ function createWindow() {
   })
 
   // Enable content protection to hide window from screen sharing
-  win.setContentProtection(true)
+  win.setContentProtection(false)
 
   // Make window visible on all workspaces/desktops
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
@@ -337,9 +337,22 @@ ipcMain.on('set-ignore-mouse-events', (_event, ignore: boolean) => {
 
 ipcMain.on('set-window-height', (_event, rawHeight: number) => {
   if (!win) return
-  const height = Math.max(50, Math.round(rawHeight))
-  const [currentWidth] = win.getSize()
-  win.setSize(currentWidth, height, false)
+  const newHeight = Math.max(60, Math.round(rawHeight))
+  const [currentWidth, currentHeight] = win.getSize()
+
+  // Only resize if height actually changed
+  if (currentHeight !== newHeight) {
+    const [x, y] = win.getPosition()
+    
+
+    // Adjust position to grow/shrink downward (keep top edge fixed)
+    win.setBounds({
+      x,
+      y,
+      width: currentWidth,
+      height: newHeight
+    }, false)
+  }
 })
 
 ipcMain.on('toggle-visibility', () => {

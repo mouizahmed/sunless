@@ -1,20 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import AttachmentsBar, { type Attachment } from '@/components/AttachmentsBar'
 import MainBar from '@/components/MainBar'
 import './App.css'
+
+const BASE_WINDOW_HEIGHT = 60
+const ATTACHMENTS_WINDOW_HEIGHT = 90
+
+const computeWindowHeight = (attachmentCount: number) =>
+  BASE_WINDOW_HEIGHT + (attachmentCount > 0 ? ATTACHMENTS_WINDOW_HEIGHT : 0)
 
 function App() {
   const [isDragging, setIsDragging] = useState(false)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
-
-  const targetWindowHeight = useMemo(() => {
-    const baseHeight = 64
-    const attachmentsHeight = attachments.length > 0 ? 120 : 0
-    return baseHeight + attachmentsHeight
-  }, [attachments.length])
 
   useEffect(() => {
     window.windowControl?.onDragOffset((offset) => {
@@ -32,7 +32,7 @@ function App() {
     const unsubscribe = window.screenshot.onResult(({ dataUrl }) => {
       setAttachments((prev) => {
         const id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
-        return [...prev, { id, type: 'image', dataUrl }]
+        return [...prev, { id, type: 'image' as const, dataUrl }]
       })
     })
 
@@ -42,8 +42,8 @@ function App() {
   }, [])
 
   useEffect(() => {
-    window.windowControl?.setWindowHeight?.(targetWindowHeight)
-  }, [targetWindowHeight])
+    window.windowControl?.setWindowHeight?.(computeWindowHeight(attachments.length))
+  }, [attachments.length])
 
   useEffect(() => {
     const handleGlobalMouseMove = (event: MouseEvent) => {
@@ -84,9 +84,11 @@ function App() {
   }
 
   return (
-    <div className="flex h-full w-full flex-col items-start justify-end space-y-1 px-2 py-2">
-      <AttachmentsBar attachments={attachments} onRemoveAttachment={handleRemoveAttachment} />
-      <MainBar ref={inputRef} onMouseDown={handleMouseDown} onScreenshot={handleScreenshot} />
+    <div className="flex h-full w-full flex-col items-center justify-center px-2">
+      <div className="flex w-full flex-col items-start justify-end space-y-1.5">
+        <AttachmentsBar attachments={attachments} onRemoveAttachment={handleRemoveAttachment} />
+        <MainBar ref={inputRef} onMouseDown={handleMouseDown} onScreenshot={handleScreenshot} />
+      </div>
     </div>
   )
 }
