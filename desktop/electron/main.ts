@@ -15,7 +15,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 // │
 process.env.APP_ROOT = path.join(__dirname, '..')
 
-// 🚧 Use ['ENV_NAME'] avoid vite:define plugin - Vite@2.x
 export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
 export const MAIN_DIST = path.join(process.env.APP_ROOT, 'dist-electron')
 export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
@@ -28,19 +27,19 @@ function createWindow() {
   win = new BrowserWindow({
     width: 600,
     height: 50,
-    frame: false,                    // No title bar or window frame
-    transparent: true,               // Transparent background
-    hasShadow: false,                // No shadow
-    alwaysOnTop: true,               // Always on top of other windows
-    skipTaskbar: true,               // Hidden from taskbar
-    resizable: false,                // Not resizable
+    frame: false,
+    transparent: true,
+    hasShadow: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
     icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
-      contextIsolation: true,        // Security: isolate context
-      nodeIntegration: false,        // Security: disable node integration
+      contextIsolation: true,
+      nodeIntegration: false,
     },
-    backgroundColor: '#00000000',    // Fully transparent
+    backgroundColor: '#00000000',
   })
 
   // Enable content protection to hide window from screen sharing
@@ -102,7 +101,6 @@ const movementActions = {
   moveUp: () => {
     if (!win || !win.isVisible()) return
     const [currentX, currentY] = win.getPosition()
-    // Get the display that contains the current window position
     const currentDisplay = screen.getDisplayNearestPoint({ x: currentX, y: currentY })
     const moveIncrement = Math.floor(Math.min(currentDisplay.workAreaSize.width, currentDisplay.workAreaSize.height) * 0.1)
     const minY = currentDisplay.workArea.y
@@ -111,7 +109,6 @@ const movementActions = {
   moveDown: () => {
     if (!win || !win.isVisible()) return
     const [currentX, currentY] = win.getPosition()
-    // Get the display that contains the current window position
     const currentDisplay = screen.getDisplayNearestPoint({ x: currentX, y: currentY })
     const moveIncrement = Math.floor(Math.min(currentDisplay.workAreaSize.width, currentDisplay.workAreaSize.height) * 0.1)
     const maxY = currentDisplay.workArea.y + currentDisplay.workArea.height - win.getSize()[1]
@@ -120,7 +117,6 @@ const movementActions = {
   moveLeft: () => {
     if (!win || !win.isVisible()) return
     const [currentX, currentY] = win.getPosition()
-    // Get the display that contains the current window position
     const currentDisplay = screen.getDisplayNearestPoint({ x: currentX, y: currentY })
     const moveIncrement = Math.floor(Math.min(currentDisplay.workAreaSize.width, currentDisplay.workAreaSize.height) * 0.1)
     const minX = currentDisplay.workArea.x
@@ -129,7 +125,6 @@ const movementActions = {
   moveRight: () => {
     if (!win || !win.isVisible()) return
     const [currentX, currentY] = win.getPosition()
-    // Get the display that contains the current window position
     const currentDisplay = screen.getDisplayNearestPoint({ x: currentX, y: currentY })
     const moveIncrement = Math.floor(Math.min(currentDisplay.workAreaSize.width, currentDisplay.workAreaSize.height) * 0.1)
     const maxX = currentDisplay.workArea.x + currentDisplay.workArea.width - win.getSize()[0]
@@ -137,7 +132,6 @@ const movementActions = {
   },
 }
 
-// Register movement shortcuts
 function registerMovementShortcuts() {
   Object.keys(movementActions).forEach((action) => {
     const keybind = shortcuts[action as keyof typeof shortcuts]
