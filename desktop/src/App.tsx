@@ -1,32 +1,54 @@
-import { useState, useEffect, useRef } from 'react'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { Camera, Paperclip, History, Settings, GripVertical } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { MouseEvent as ReactMouseEvent } from 'react'
+import AttachmentsBar, { type Attachment } from '@/components/AttachmentsBar'
+import MainBar from '@/components/MainBar'
 import './App.css'
 
 function App() {
   const [isDragging, setIsDragging] = useState(false)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
-  const overlayRef = useRef<HTMLDivElement>(null)
+  const [attachments, setAttachments] = useState<Attachment[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
 
+  const targetWindowHeight = useMemo(() => {
+    const baseHeight = 64
+    const attachmentsHeight = attachments.length > 0 ? 120 : 0
+    return baseHeight + attachmentsHeight
+  }, [attachments.length])
+
   useEffect(() => {
-    // Listen for drag offset from main process
     window.windowControl?.onDragOffset((offset) => {
       setDragOffset(offset)
     })
 
-    // Listen for focus input event from main process
     window.windowControl?.onFocusInput(() => {
       inputRef.current?.focus()
     })
   }, [])
 
-  // Global mouse move and up handlers
   useEffect(() => {
-    const handleGlobalMouseMove = (e: MouseEvent) => {
+    if (!window.screenshot?.onResult) return
+
+    const unsubscribe = window.screenshot.onResult(({ dataUrl }) => {
+      setAttachments((prev) => {
+        const id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
+        return [...prev, { id, type: 'image', dataUrl }]
+      })
+    })
+
+    return () => {
+      unsubscribe?.()
+    }
+  }, [])
+
+  useEffect(() => {
+    window.windowControl?.setWindowHeight?.(targetWindowHeight)
+  }, [targetWindowHeight])
+
+  useEffect(() => {
+    const handleGlobalMouseMove = (event: MouseEvent) => {
       if (!isDragging) return
-      window.windowControl?.moveDrag(e.screenX, e.screenY, dragOffset.x, dragOffset.y)
+      window.windowControl?.moveDrag(event.screenX, event.screenY, dragOffset.x, dragOffset.y)
     }
 
     const handleGlobalMouseUp = () => {
@@ -44,62 +66,27 @@ function App() {
     }
   }, [isDragging, dragOffset])
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleMouseDown = (event: ReactMouseEvent<HTMLDivElement>) => {
     setIsDragging(true)
-    window.windowControl?.startDrag(e.screenX, e.screenY)
+    window.windowControl?.startDrag(event.screenX, event.screenY)
+  }
+
+  const handleScreenshot = () => {
+    try {
+      window.screenshot.start()
+    } catch (error) {
+      console.error('Failed to start screenshot', error)
+    }
+  }
+
+  const handleRemoveAttachment = (id: string) => {
+    setAttachments((prev) => prev.filter((attachment) => attachment.id !== id))
   }
 
   return (
-    <div
-      className="w-full h-full flex items-center gap-2 px-3 bg-black/40 backdrop-blur-xl rounded-xl"
-      ref={overlayRef}
-      onMouseDown={handleMouseDown}
-    >
-      <div className="flex-1">
-        <Input
-          ref={inputRef}
-          type="text"
-          placeholder="Ask me anything..."
-          className="bg-white/10 border-white/20 text-white placeholder:text-white/50 h-8 text-sm"
-        />
-      </div>
-
-      <div className="flex gap-1.5">
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-8 w-8 rounded-full bg-white/10 hover:bg-white/20 text-white hover:text-white"
-          title="Screenshot"
-        >
-          <Camera className="h-4 w-4" />
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-8 w-8 rounded-full bg-white/10 hover:bg-white/20 text-white hover:text-white"
-          title="Attach"
-        >
-          <Paperclip className="h-4 w-4" />
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-8 w-8 rounded-full bg-white/10 hover:bg-white/20 text-white hover:text-white"
-          title="History"
-        >
-          <History className="h-4 w-4" />
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-8 w-8 rounded-full bg-white/10 hover:bg-white/20 text-white hover:text-white"
-          title="Settings"
-        >
-          <Settings className="h-4 w-4" />
-        </Button>
-      </div>
-
-      <GripVertical className="h-4 w-4 text-white/40" />
+    <div className="flex h-full w-full flex-col items-start justify-end space-y-1 px-2 py-2">
+      <AttachmentsBar attachments={attachments} onRemoveAttachment={handleRemoveAttachment} />
+      <MainBar ref={inputRef} onMouseDown={handleMouseDown} onScreenshot={handleScreenshot} />
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, screen, globalShortcut } from 'electron'
+import { app, BrowserWindow, ipcMain, screen, globalShortcut, desktopCapturer, clipboard } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
@@ -22,6 +22,8 @@ export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST
 
 let win: BrowserWindow | null
+let screenshotWin: BrowserWindow | null = null
+let shouldRestoreMainWindowAfterScreenshot = false
 
 function createWindow() {
   win = new BrowserWindow({
@@ -97,6 +99,8 @@ const shortcuts = {
   toggleVisibility: isMac ? 'Cmd+\\' : 'Ctrl+\\',
 }
 
+const screenshotShortcut = isMac ? 'Cmd+Shift+S' : 'Ctrl+Shift+S'
+
 const movementActions = {
   moveUp: () => {
     if (!win || !win.isVisible()) return
@@ -130,6 +134,102 @@ const movementActions = {
     const maxX = currentDisplay.workArea.x + currentDisplay.workArea.width - win.getSize()[0]
     win.setPosition(Math.min(maxX, currentX + moveIncrement), currentY)
   },
+}
+
+function closeScreenshotWindow() {
+  if (screenshotWin && !screenshotWin.isDestroyed()) {
+    screenshotWin.close()
+  }
+}
+
+function createScreenshotWindow(display: Electron.Display) {
+  if (screenshotWin && !screenshotWin.isDestroyed()) {
+    screenshotWin.focus()
+    return
+  }
+
+  const { bounds } = display
+
+  screenshotWin = new BrowserWindow({
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: false,
+    hasShadow: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    focusable: true,
+    show: false,
+    alwaysOnTop: true,
+    backgroundColor: '#00000000',
+    type: 'toolbar',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.mjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+
+  screenshotWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  screenshotWin.setContentProtection(true)
+  screenshotWin.setMenuBarVisibility(false)
+  screenshotWin.setIgnoreMouseEvents(false)
+  const alwaysOnTopLevel = (process.platform === 'darwin' || process.platform === 'win32') ? 'screen-saver' : 'floating'
+  screenshotWin.setAlwaysOnTop(true, alwaysOnTopLevel)
+
+  screenshotWin.on('closed', () => {
+    screenshotWin = null
+    if (shouldRestoreMainWindowAfterScreenshot && win && !win.isDestroyed()) {
+      win.show()
+      win.focus()
+    }
+    shouldRestoreMainWindowAfterScreenshot = false
+  })
+
+  const query = new URLSearchParams({
+    view: 'screenshot',
+    displayId: String(display.id),
+    scaleFactor: String(display.scaleFactor),
+  })
+
+  if (VITE_DEV_SERVER_URL) {
+    screenshotWin.loadURL(`${VITE_DEV_SERVER_URL}?${query.toString()}`)
+  } else {
+    screenshotWin.loadFile(path.join(RENDERER_DIST, 'index.html'), {
+      query: Object.fromEntries(query.entries()),
+    })
+  }
+
+  screenshotWin.once('ready-to-show', () => {
+    screenshotWin?.show()
+    screenshotWin?.focus()
+  })
+}
+
+function startScreenshotCapture() {
+  const cursorPoint = screen.getCursorScreenPoint()
+  const targetDisplay = screen.getDisplayNearestPoint(cursorPoint)
+  if (!targetDisplay) return
+
+  if (screenshotWin && !screenshotWin.isDestroyed()) {
+    screenshotWin.focus()
+    return
+  }
+
+  if (win && !win.isDestroyed()) {
+    shouldRestoreMainWindowAfterScreenshot = win.isVisible()
+    if (shouldRestoreMainWindowAfterScreenshot) {
+      win.hide()
+    }
+  } else {
+    shouldRestoreMainWindowAfterScreenshot = false
+  }
+
+  createScreenshotWindow(targetDisplay)
 }
 
 function registerMovementShortcuts() {
@@ -184,6 +284,17 @@ function registerKeyboardShortcuts() {
       console.error(`Failed to register toggleVisibility (${shortcuts.toggleVisibility}):`, error)
     }
   }
+
+  if (screenshotShortcut) {
+    try {
+      globalShortcut.register(screenshotShortcut, () => {
+        startScreenshotCapture()
+      })
+      console.log(`Registered screenshot: ${screenshotShortcut}`)
+    } catch (error) {
+      console.error(`Failed to register screenshot (${screenshotShortcut}):`, error)
+    }
+  }
 }
 
 // Quit when all windows are closed, except on macOS. There, it's common
@@ -224,12 +335,117 @@ ipcMain.on('set-ignore-mouse-events', (_event, ignore: boolean) => {
   win.setIgnoreMouseEvents(ignore, { forward: true })
 })
 
+ipcMain.on('set-window-height', (_event, rawHeight: number) => {
+  if (!win) return
+  const height = Math.max(50, Math.round(rawHeight))
+  const [currentWidth] = win.getSize()
+  win.setSize(currentWidth, height, false)
+})
+
 ipcMain.on('toggle-visibility', () => {
   if (!win) return
   if (win.isVisible()) {
     win.hide()
   } else {
     win.show()
+  }
+})
+
+ipcMain.on('start-screenshot', () => {
+  startScreenshotCapture()
+})
+
+ipcMain.on('screenshot-close', () => {
+  closeScreenshotWindow()
+})
+
+ipcMain.on('screenshot-cancel', () => {
+  closeScreenshotWindow()
+})
+
+ipcMain.handle('capture-screen-selection', async (_event, payload: {
+  displayId: string
+  x: number
+  y: number
+  width: number
+  height: number
+  scaleFactor: number
+}) => {
+  try {
+    const {
+      displayId,
+      x,
+      y,
+      width,
+      height,
+      scaleFactor,
+    } = payload
+
+    if (width <= 0 || height <= 0) {
+      throw new Error('Invalid capture dimensions')
+    }
+
+    const targetDisplay = screen.getAllDisplays().find((display) => String(display.id) === String(displayId))
+    if (!targetDisplay) {
+      throw new Error(`Display ${displayId} not found`)
+    }
+
+    const effectiveScaleFactor = scaleFactor > 0 ? scaleFactor : targetDisplay.scaleFactor || 1
+    const captureWidth = Math.max(1, Math.round(targetDisplay.bounds.width * targetDisplay.scaleFactor))
+    const captureHeight = Math.max(1, Math.round(targetDisplay.bounds.height * targetDisplay.scaleFactor))
+
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: {
+        width: captureWidth,
+        height: captureHeight,
+      },
+    })
+
+    const displayIdString = String(displayId)
+    const source = sources.find((candidate) => {
+      if (candidate.display_id === displayIdString) return true
+      const idSegments = candidate.id.split(':')
+      return idSegments.includes(displayIdString)
+    })
+
+    if (!source) {
+      throw new Error(`Unable to locate capture source for display ${displayIdString}`)
+    }
+
+    const cropRect = {
+      x: Math.max(0, Math.round(x * effectiveScaleFactor)),
+      y: Math.max(0, Math.round(y * effectiveScaleFactor)),
+      width: Math.round(width * effectiveScaleFactor),
+      height: Math.round(height * effectiveScaleFactor),
+    }
+
+    if (cropRect.width <= 0 || cropRect.height <= 0) {
+      throw new Error('Capture size is too small')
+    }
+
+    const thumbnailSize = source.thumbnail.getSize()
+    if (cropRect.x + cropRect.width > thumbnailSize.width) {
+      cropRect.width = Math.max(1, thumbnailSize.width - cropRect.x)
+    }
+    if (cropRect.y + cropRect.height > thumbnailSize.height) {
+      cropRect.height = Math.max(1, thumbnailSize.height - cropRect.y)
+    }
+
+    const croppedImage = source.thumbnail.crop(cropRect)
+    clipboard.writeImage(croppedImage)
+
+    const dataUrl = `data:image/png;base64,${croppedImage.toPNG().toString('base64')}`
+    win?.webContents.send('screenshot-result', { dataUrl })
+
+    setImmediate(() => {
+      closeScreenshotWindow()
+    })
+
+    return { dataUrl }
+  } catch (error) {
+    closeScreenshotWindow()
+    throw error
   }
 })
 

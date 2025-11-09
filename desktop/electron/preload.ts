@@ -1,4 +1,5 @@
 import { ipcRenderer, contextBridge } from 'electron'
+import type { IpcRendererEvent } from 'electron'
 
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld('ipcRenderer', {
@@ -41,11 +42,45 @@ contextBridge.exposeInMainWorld('windowControl', {
     ipcRenderer.send('toggle-visibility')
   },
 
+  setWindowHeight: (height: number) => {
+    ipcRenderer.send('set-window-height', height)
+  },
+
   onDragOffset: (callback: (offset: { x: number; y: number }) => void) => {
     ipcRenderer.on('drag-offset', (_event, offset) => callback(offset))
   },
 
   onFocusInput: (callback: () => void) => {
     ipcRenderer.on('focus-input', () => callback())
+  }
+})
+
+// Screenshot API
+contextBridge.exposeInMainWorld('screenshot', {
+  start: () => {
+    ipcRenderer.send('start-screenshot')
+  },
+  captureSelection: (selection: {
+    displayId: string
+    x: number
+    y: number
+    width: number
+    height: number
+    scaleFactor: number
+  }) => {
+    return ipcRenderer.invoke('capture-screen-selection', selection)
+  },
+  cancel: () => {
+    ipcRenderer.send('screenshot-cancel')
+  },
+  close: () => {
+    ipcRenderer.send('screenshot-close')
+  },
+  onResult: (callback: (result: { dataUrl: string }) => void) => {
+    const listener = (_event: IpcRendererEvent, data: { dataUrl: string }) => callback(data)
+    ipcRenderer.on('screenshot-result', listener)
+    return () => {
+      ipcRenderer.off('screenshot-result', listener)
+    }
   }
 })
