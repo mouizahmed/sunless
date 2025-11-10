@@ -1,6 +1,8 @@
 import { app, BrowserWindow, ipcMain, screen, globalShortcut, desktopCapturer, clipboard } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import { setupAuthHandlers } from './auth-handlers'
+import { setupProtocolHandler, setupProtocolEvents, setMainWindow } from './protocol-handler'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -43,6 +45,9 @@ function createWindow() {
     },
     backgroundColor: '#00000000',
   })
+
+  // Set window reference for protocol handler (auth callbacks)
+  setMainWindow(win)
 
   // Enable content protection to hide window from screen sharing
   win.setContentProtection(false)
@@ -304,6 +309,7 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
     win = null
+    setMainWindow(null)
   }
 })
 
@@ -462,7 +468,28 @@ ipcMain.handle('capture-screen-selection', async (_event, payload: {
   }
 })
 
-app.whenReady().then(createWindow)
+// Setup protocol handler before app is ready (for OS protocol registration)
+setupProtocolHandler()
+
+// Single instance lock - ensure only one instance of the app runs
+// This is critical for protocol handling (sunless:// URLs)
+const gotTheLock = app.requestSingleInstanceLock()
+
+if (!gotTheLock) {
+  // Another instance is already running, quit this one
+  app.quit()
+} else {
+  // Setup protocol event listeners (for handling sunless:// URLs from second instance)
+  setupProtocolEvents()
+
+  app.whenReady().then(() => {
+    // Setup auth IPC handlers
+    setupAuthHandlers()
+
+    // Create the main window
+    createWindow()
+  })
+}
 
 // Cleanup shortcuts on quit
 app.on('will-quit', () => {

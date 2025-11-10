@@ -1,20 +1,24 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
+import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import AttachmentsBar, { type Attachment } from '@/components/AttachmentsBar'
 import MainBar from '@/components/MainBar'
+import Welcome from '@/components/Welcome'
 import './App.css'
 
-const BASE_WINDOW_HEIGHT = 60
-const ATTACHMENTS_WINDOW_HEIGHT = 90
+const WINDOW_VERTICAL_PADDING = 16
 
-const computeWindowHeight = (attachmentCount: number) =>
-  BASE_WINDOW_HEIGHT + (attachmentCount > 0 ? ATTACHMENTS_WINDOW_HEIGHT : 0)
-
-function App() {
+function AppContent() {
+  const { user, isLoading } = useAuth()
   const [isDragging, setIsDragging] = useState(false)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [contentEl, setContentEl] = useState<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const contentRef = useCallback((node: HTMLDivElement | null) => {
+    setContentEl(node)
+  }, [])
 
   useEffect(() => {
     window.windowControl?.onDragOffset((offset) => {
@@ -41,9 +45,30 @@ function App() {
     }
   }, [])
 
-  useEffect(() => {
-    window.windowControl?.setWindowHeight?.(computeWindowHeight(attachments.length))
-  }, [attachments.length])
+  useLayoutEffect(() => {
+    if (!contentEl) return
+
+    const updateHeight = () => {
+      const height = contentEl.offsetHeight + WINDOW_VERTICAL_PADDING
+      window.windowControl?.setWindowHeight?.(height)
+    }
+
+    updateHeight()
+
+    if (typeof ResizeObserver === 'undefined') {
+      return
+    }
+
+    const observer = new ResizeObserver(() => {
+      updateHeight()
+    })
+
+    observer.observe(contentEl)
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [contentEl])
 
   useEffect(() => {
     const handleGlobalMouseMove = (event: MouseEvent) => {
@@ -83,13 +108,33 @@ function App() {
     setAttachments((prev) => prev.filter((attachment) => attachment.id !== id))
   }
 
+  // Show nothing while loading auth state
+  if (isLoading) {
+    return null
+  }
+
   return (
     <div className="flex h-full w-full flex-col items-center justify-center px-2">
-      <div className="flex w-full flex-col items-start justify-end space-y-1.5">
-        <AttachmentsBar attachments={attachments} onRemoveAttachment={handleRemoveAttachment} />
-        <MainBar ref={inputRef} onMouseDown={handleMouseDown} onScreenshot={handleScreenshot} />
-      </div>
+      {user ? (
+        <div
+          ref={contentRef}
+          className="flex w-full flex-col items-start justify-end space-y-1.5"
+        >
+          <AttachmentsBar attachments={attachments} onRemoveAttachment={handleRemoveAttachment} />
+          <MainBar ref={inputRef} onMouseDown={handleMouseDown} onScreenshot={handleScreenshot} />
+        </div>
+      ) : (
+        <Welcome onMouseDown={handleMouseDown} ref={contentRef} />
+      )}
     </div>
+  )
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   )
 }
 

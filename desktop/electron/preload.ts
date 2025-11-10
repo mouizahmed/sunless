@@ -84,3 +84,27 @@ contextBridge.exposeInMainWorld('screenshot', {
     }
   }
 })
+
+// Authentication API
+contextBridge.exposeInMainWorld('electronAPI', {
+  // OAuth Authentication
+  authenticateWithGoogle: () => ipcRenderer.invoke('auth:google'),
+
+  // Session Management
+  logout: () => ipcRenderer.invoke('auth:logout'),
+  logoutEverywhere: (idToken: string) => ipcRenderer.invoke('auth:logout-everywhere', idToken),
+
+  // Event listeners
+  onAuthSessionUpdated: (callback: (event: IpcRendererEvent, data: unknown) => void) => {
+    const listener = (event: IpcRendererEvent, data: unknown) => callback(event, data)
+    ipcRenderer.on('auth-session-updated', listener)
+    return () => {
+      ipcRenderer.off('auth-session-updated', listener)
+    }
+  }
+})
+
+// Expose environment info
+contextBridge.exposeInMainWorld('env', {
+  platform: process.platform
+})
