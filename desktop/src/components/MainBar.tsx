@@ -7,9 +7,13 @@ import { Camera, Paperclip, History, Settings, GripVertical } from 'lucide-react
 type MainBarProps = {
   onMouseDown: (event: ReactMouseEvent<HTMLDivElement>) => void
   onScreenshot: () => void
+  onOpenSettings?: () => void
 }
 
-const MainBar = forwardRef<HTMLInputElement, MainBarProps>(function MainBar({ onMouseDown, onScreenshot }, inputRef) {
+const MainBar = forwardRef<HTMLInputElement, MainBarProps>(function MainBar(
+  { onMouseDown, onScreenshot, onOpenSettings },
+  inputRef,
+) {
   return (
     <div className="flex w-full items-center gap-2 rounded-lg bg-black/40 px-2.5 py-2 backdrop-blur-xl">
       <div
@@ -59,6 +63,7 @@ const MainBar = forwardRef<HTMLInputElement, MainBarProps>(function MainBar({ on
           variant="ghost"
           className="h-8 w-8 shrink-0 rounded-md bg-white/10 p-0 text-white hover:bg-white/20 hover:text-white"
           title="Settings"
+          onClick={onOpenSettings}
         >
           <Settings className="h-4 w-4" />
         </Button>

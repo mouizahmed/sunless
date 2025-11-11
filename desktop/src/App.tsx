@@ -3,17 +3,19 @@ import type { MouseEvent as ReactMouseEvent } from 'react'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import AttachmentsBar, { type Attachment } from '@/components/AttachmentsBar'
 import MainBar from '@/components/MainBar'
+import SettingsPanel from '@/components/SettingsPanel'
 import Welcome from '@/components/Welcome'
 import './App.css'
 
 const WINDOW_VERTICAL_PADDING = 16
 
 function AppContent() {
-  const { user, isLoading } = useAuth()
+  const { user, isLoading, logout, logoutEverywhere } = useAuth()
   const [isDragging, setIsDragging] = useState(false)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [contentEl, setContentEl] = useState<HTMLDivElement | null>(null)
+  const [activePanel, setActivePanel] = useState<'main' | 'settings'>('main')
   const inputRef = useRef<HTMLInputElement>(null)
 
   const contentRef = useCallback((node: HTMLDivElement | null) => {
@@ -71,6 +73,12 @@ function AppContent() {
   }, [contentEl])
 
   useEffect(() => {
+    if (user) {
+      setActivePanel('main')
+    }
+  }, [user])
+
+  useEffect(() => {
     const handleGlobalMouseMove = (event: MouseEvent) => {
       if (!isDragging) return
       window.windowControl?.moveDrag(event.screenX, event.screenY, dragOffset.x, dragOffset.y)
@@ -120,8 +128,24 @@ function AppContent() {
           ref={contentRef}
           className="flex w-full flex-col items-start justify-end space-y-1.5"
         >
-          <AttachmentsBar attachments={attachments} onRemoveAttachment={handleRemoveAttachment} />
-          <MainBar ref={inputRef} onMouseDown={handleMouseDown} onScreenshot={handleScreenshot} />
+          {activePanel === 'settings' ? (
+            <SettingsPanel
+              onClose={() => setActivePanel('main')}
+              onMouseDown={handleMouseDown}
+              onLogout={logout}
+              onLogoutEverywhere={logoutEverywhere}
+            />
+          ) : (
+            <>
+              <AttachmentsBar attachments={attachments} onRemoveAttachment={handleRemoveAttachment} />
+              <MainBar
+                ref={inputRef}
+                onMouseDown={handleMouseDown}
+                onScreenshot={handleScreenshot}
+                onOpenSettings={() => setActivePanel('settings')}
+              />
+            </>
+          )}
         </div>
       ) : (
         <Welcome onMouseDown={handleMouseDown} ref={contentRef} />
