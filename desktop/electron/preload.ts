@@ -1,6 +1,19 @@
 import { ipcRenderer, contextBridge } from 'electron'
 import type { IpcRendererEvent } from 'electron'
 
+type ShortcutAction =
+  | 'moveUp'
+  | 'moveDown'
+  | 'moveLeft'
+  | 'moveRight'
+  | 'toggleVisibility'
+  | 'screenshot'
+
+type ShortcutState = {
+  current: Record<ShortcutAction, string>
+  defaults: Record<ShortcutAction, string>
+}
+
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld('ipcRenderer', {
   on(...args: Parameters<typeof ipcRenderer.on>) {
@@ -83,6 +96,12 @@ contextBridge.exposeInMainWorld('screenshot', {
       ipcRenderer.off('screenshot-result', listener)
     }
   }
+})
+
+contextBridge.exposeInMainWorld('shortcutControl', {
+  getAll: () => ipcRenderer.invoke('shortcuts:get') as Promise<ShortcutState>,
+  update: (action: ShortcutAction, shortcut: string | null) =>
+    ipcRenderer.invoke('shortcuts:update', { action, shortcut }) as Promise<ShortcutState>,
 })
 
 // Authentication API

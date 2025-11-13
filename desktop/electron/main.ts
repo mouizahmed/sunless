@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { setupAuthHandlers } from './auth-handlers'
 import { setupProtocolHandler, setupProtocolEvents, setMainWindow } from './protocol-handler'
+import fs from 'node:fs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -96,15 +97,93 @@ function createWindow() {
 // Define shortcuts and movement actions at module level
 const isMac = process.platform === 'darwin'
 
-const shortcuts = {
+type MovementAction =
+  | 'moveUp'
+  | 'moveDown'
+  | 'moveLeft'
+  | 'moveRight'
+type ShortcutAction = MovementAction | 'toggleVisibility'
+type ShortcutPayloadAction = ShortcutAction | 'screenshot'
+type ShortcutUpdatePayload = {
+  action: ShortcutPayloadAction
+  shortcut: string | null
+}
+
+const defaultShortcuts: Record<ShortcutAction, string> = {
   moveUp: isMac ? 'Cmd+Up' : 'Ctrl+Up',
   moveDown: isMac ? 'Cmd+Down' : 'Ctrl+Down',
   moveLeft: isMac ? 'Cmd+Left' : 'Ctrl+Left',
   moveRight: isMac ? 'Cmd+Right' : 'Ctrl+Right',
-  toggleVisibility: isMac ? 'Cmd+\\' : 'Ctrl+\\',
+  toggleVisibility: isMac ? 'Cmd+Space' : 'Ctrl+Space',
 }
 
-const screenshotShortcut = isMac ? 'Cmd+Shift+S' : 'Ctrl+Shift+S'
+const defaultScreenshotShortcut = isMac ? 'Cmd+Shift+S' : 'Ctrl+Shift+S'
+
+function storageFilePath(fileName: string) {
+  const appData = app.getPath('userData')
+  return path.join(appData, fileName)
+}
+
+const shortcutsFilePath = storageFilePath('shortcuts.json')
+
+function readPersistedShortcuts() {
+  try {
+    const raw = fs.readFileSync(shortcutsFilePath, 'utf-8')
+    const parsed = JSON.parse(raw) as Partial<Record<ShortcutPayloadAction, string>>
+
+    return parsed
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      'code' in error &&
+      (error as NodeJS.ErrnoException).code === 'ENOENT'
+    ) {
+      return {}
+    }
+
+    console.error('Failed to read persisted shortcuts:', error)
+    return {}
+  }
+}
+
+function writePersistedShortcuts(values: Record<ShortcutPayloadAction, string>) {
+  try {
+    fs.mkdirSync(path.dirname(shortcutsFilePath), { recursive: true })
+    fs.writeFileSync(shortcutsFilePath, JSON.stringify(values, null, 2), 'utf-8')
+  } catch (error) {
+    console.error('Failed to write shortcuts configuration:', error)
+  }
+}
+
+const persistedShortcuts = readPersistedShortcuts()
+
+let shortcuts: Record<ShortcutAction, string> = {
+  ...defaultShortcuts,
+  ...Object.fromEntries(
+    Object.entries(persistedShortcuts).filter(
+      (entry): entry is [ShortcutAction, string] =>
+        ['moveUp', 'moveDown', 'moveLeft', 'moveRight', 'toggleVisibility'].includes(entry[0]),
+    ),
+  ),
+}
+
+let screenshotShortcut =
+  typeof persistedShortcuts.screenshot === 'string' && persistedShortcuts.screenshot.trim()
+    ? persistedShortcuts.screenshot.trim()
+    : defaultScreenshotShortcut
+
+function getShortcutState() {
+  return {
+    current: {
+      ...shortcuts,
+      screenshot: screenshotShortcut,
+    },
+    defaults: {
+      ...defaultShortcuts,
+      screenshot: defaultScreenshotShortcut,
+    },
+  }
+}
 
 const movementActions = {
   moveUp: () => {
@@ -466,6 +545,91 @@ ipcMain.handle('capture-screen-selection', async (_event, payload: {
     closeScreenshotWindow()
     throw error
   }
+})
+
+ipcMain.handle('shortcuts:get', () => {
+  return getShortcutState()
+})
+
+ipcMain.handle('shortcuts:update', (_event, payload: ShortcutUpdatePayload) => {
+  const { action, shortcut } = payload
+
+  if (!action) {
+    throw new Error('Shortcut action is required')
+  }
+
+  if (action !== 'screenshot' && !(action in shortcuts)) {
+    throw new Error(`Unsupported shortcut action: ${action}`)
+  }
+
+  const targetDefault =
+    action === 'screenshot'
+      ? defaultScreenshotShortcut
+      : defaultShortcuts[action as ShortcutAction]
+
+  const nextShortcut = (shortcut ?? targetDefault).trim()
+
+  if (!nextShortcut) {
+    throw new Error('Shortcut value cannot be empty')
+  }
+
+  const previousShortcut =
+    action === 'screenshot'
+      ? screenshotShortcut
+      : shortcuts[action as ShortcutAction]
+
+  if (previousShortcut === nextShortcut) {
+    return getShortcutState()
+  }
+
+  if (action === 'screenshot') {
+    screenshotShortcut = nextShortcut
+  } else {
+    shortcuts = {
+      ...shortcuts,
+      [action]: nextShortcut,
+    }
+  }
+
+  registerKeyboardShortcuts()
+
+  const windowVisible = Boolean(win?.isVisible())
+  if (win && !windowVisible) {
+    unregisterMovementShortcuts()
+  }
+
+  const shouldValidate =
+    action === 'screenshot' ||
+    action === 'toggleVisibility' ||
+    windowVisible
+
+  if (shouldValidate) {
+    const isRegistered = globalShortcut.isRegistered(nextShortcut)
+
+    if (!isRegistered) {
+      if (action === 'screenshot') {
+        screenshotShortcut = previousShortcut
+      } else if (previousShortcut) {
+        shortcuts = {
+          ...shortcuts,
+          [action]: previousShortcut,
+        }
+      }
+
+      registerKeyboardShortcuts()
+
+      if (win && !windowVisible) {
+        unregisterMovementShortcuts()
+      }
+
+      throw new Error(`Failed to register shortcut: ${nextShortcut}`)
+    }
+  }
+
+  const nextState = getShortcutState()
+  writePersistedShortcuts(nextState.current)
+
+  return nextState
 })
 
 // Setup protocol handler before app is ready (for OS protocol registration)

@@ -8,6 +8,7 @@ import Welcome from '@/components/Welcome'
 import './App.css'
 
 const WINDOW_VERTICAL_PADDING = 16
+const MAX_APP_HEIGHT = 520
 
 function AppContent() {
   const { user, isLoading, logout, logoutEverywhere } = useAuth()
@@ -51,7 +52,8 @@ function AppContent() {
     if (!contentEl) return
 
     const updateHeight = () => {
-      const height = contentEl.offsetHeight + WINDOW_VERTICAL_PADDING
+      const contentHeight = Math.min(contentEl.scrollHeight, MAX_APP_HEIGHT)
+      const height = contentHeight + WINDOW_VERTICAL_PADDING
       window.windowControl?.setWindowHeight?.(height)
     }
 
@@ -126,15 +128,18 @@ function AppContent() {
       {user ? (
         <div
           ref={contentRef}
-          className="flex w-full flex-col items-start justify-end space-y-1.5"
+          style={{ maxHeight: MAX_APP_HEIGHT }}
+          className="flex w-full flex-col items-stretch gap-1.5 overflow-hidden"
         >
           {activePanel === 'settings' ? (
-            <SettingsPanel
-              onClose={() => setActivePanel('main')}
-              onMouseDown={handleMouseDown}
-              onLogout={logout}
-              onLogoutEverywhere={logoutEverywhere}
-            />
+            <div className="attachments-scrollbar max-h-full w-full overflow-y-auto overscroll-contain pr-1">
+              <SettingsPanel
+                onClose={() => setActivePanel('main')}
+                onMouseDown={handleMouseDown}
+                onLogout={logout}
+                onLogoutEverywhere={logoutEverywhere}
+              />
+            </div>
           ) : (
             <>
               <AttachmentsBar attachments={attachments} onRemoveAttachment={handleRemoveAttachment} />

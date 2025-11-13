@@ -63,6 +63,24 @@ interface ScreenshotControl {
   onResult: (callback: (result: ScreenshotResult) => void) => () => void
 }
 
+type ShortcutAction =
+  | 'moveUp'
+  | 'moveDown'
+  | 'moveLeft'
+  | 'moveRight'
+  | 'toggleVisibility'
+  | 'screenshot'
+
+type ShortcutState = {
+  current: Record<ShortcutAction, string>
+  defaults: Record<ShortcutAction, string>
+}
+
+interface ShortcutControl {
+  getAll: () => Promise<ShortcutState>
+  update: (action: ShortcutAction, shortcut: string | null) => Promise<ShortcutState>
+}
+
 interface ElectronAPI {
   // OAuth Authentication
   authenticateWithGoogle: () => Promise<AuthResult>
@@ -84,6 +102,7 @@ interface Window {
   windowControl: WindowControl
   screenshot: ScreenshotControl
   electronAPI: ElectronAPI
+  shortcutControl?: ShortcutControl
   env: {
     platform: NodeJS.Platform
   }
