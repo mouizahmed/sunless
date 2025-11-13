@@ -7,11 +7,12 @@ import { Camera, Paperclip, History, Settings, GripVertical } from 'lucide-react
 type MainBarProps = {
   onMouseDown: (event: ReactMouseEvent<HTMLDivElement>) => void
   onScreenshot: () => void
+  onAttach: () => void
   onOpenSettings?: () => void
 }
 
 const MainBar = forwardRef<HTMLInputElement, MainBarProps>(function MainBar(
-  { onMouseDown, onScreenshot, onOpenSettings },
+  { onMouseDown, onScreenshot, onAttach, onOpenSettings },
   inputRef,
 ) {
   return (
@@ -47,6 +48,7 @@ const MainBar = forwardRef<HTMLInputElement, MainBarProps>(function MainBar(
           variant="ghost"
           className="h-8 w-8 shrink-0 rounded-md bg-white/10 p-0 text-white hover:bg-white/20 hover:text-white"
           title="Attach"
+          onClick={onAttach}
         >
           <Paperclip className="h-4 w-4" />
         </Button>

@@ -291,7 +291,7 @@ export default function SettingsPanel({
   )
 
   return (
-    <div className="flex w-full flex-col gap-3">
+    <div className="flex w-full flex-col gap-1.5">
       <PanelBar
         onMouseDown={onMouseDown}
         title="Settings"
@@ -309,8 +309,8 @@ export default function SettingsPanel({
         }
       />
 
-      <div className="attachments-scrollbar flex max-h-[420px] flex-col gap-3 overflow-y-auto rounded-xl border border-white/10 bg-black/50 p-4 text-sm text-white/80 backdrop-blur-xl">
-        <div className="flex flex-col gap-3 rounded-lg border border-white/10 bg-white/5 p-3">
+      <div className="attachments-scrollbar flex max-h-[420px] flex-col gap-1.5 overflow-y-auto rounded-xl border border-white/10 bg-black/50 p-4 text-sm text-white/80 backdrop-blur-xl">
+        <div className="flex flex-col gap-1.5 rounded-lg border border-white/10 bg-white/5 p-3">
           <div className="flex items-start gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-black/50 text-white/60">
               <Keyboard className="h-4 w-4" />
@@ -448,7 +448,7 @@ export default function SettingsPanel({
         {sections.map(({ key, title, description, icon: Icon, actions }) => (
           <div
             key={key}
-            className="flex flex-col gap-3 rounded-lg border border-white/10 bg-white/5 p-3"
+            className="flex flex-col gap-1.5 rounded-lg border border-white/10 bg-white/5 p-3"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-3">

@@ -81,6 +81,19 @@ interface ShortcutControl {
   update: (action: ShortcutAction, shortcut: string | null) => Promise<ShortcutState>
 }
 
+interface AttachmentResult {
+  kind: 'image' | 'file'
+  mimeType: string
+  name: string
+  size: number
+  filePath: string
+  dataUrl?: string
+}
+
+interface AttachmentsControl {
+  pickFiles: () => Promise<AttachmentResult[]>
+}
+
 interface ElectronAPI {
   // OAuth Authentication
   authenticateWithGoogle: () => Promise<AuthResult>
@@ -103,6 +116,7 @@ interface Window {
   screenshot: ScreenshotControl
   electronAPI: ElectronAPI
   shortcutControl?: ShortcutControl
+  attachments?: AttachmentsControl
   env: {
     platform: NodeJS.Platform
   }

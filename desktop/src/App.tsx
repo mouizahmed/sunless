@@ -23,6 +23,18 @@ function AppContent() {
     setContentEl(node)
   }, [])
 
+  const createAttachment = useCallback((init: Omit<Attachment, 'id'>): Attachment => {
+    const id =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random()}`
+
+    return {
+      id,
+      ...init,
+    }
+  }, [])
+
   useEffect(() => {
     window.windowControl?.onDragOffset((offset) => {
       setDragOffset(offset)
@@ -37,16 +49,21 @@ function AppContent() {
     if (!window.screenshot?.onResult) return
 
     const unsubscribe = window.screenshot.onResult(({ dataUrl }) => {
-      setAttachments((prev) => {
-        const id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
-        return [...prev, { id, type: 'image' as const, dataUrl }]
-      })
+      setAttachments((prev) => [
+        ...prev,
+        createAttachment({
+          kind: 'image',
+          dataUrl,
+          mimeType: 'image/png',
+          source: 'screenshot',
+        }),
+      ])
     })
 
     return () => {
       unsubscribe?.()
     }
-  }, [])
+  }, [createAttachment])
 
   useLayoutEffect(() => {
     if (!contentEl) return
@@ -114,6 +131,38 @@ function AppContent() {
     }
   }
 
+  const handleAttach = useCallback(async () => {
+    try {
+      const picker = window.attachments?.pickFiles
+      if (!picker) {
+        console.warn('Attachment picker is not available')
+        return
+      }
+
+      const selected = await picker()
+      if (!selected || selected.length === 0) {
+        return
+      }
+
+      setAttachments((prev) => [
+        ...prev,
+        ...selected.map((item) =>
+          createAttachment({
+            kind: item.kind,
+            dataUrl: item.dataUrl,
+            mimeType: item.mimeType,
+            name: item.name,
+            size: item.size,
+            filePath: item.filePath,
+            source: 'picker',
+          }),
+        ),
+      ])
+    } catch (error) {
+      console.error('Failed to attach files', error)
+    }
+  }, [createAttachment])
+
   const handleRemoveAttachment = (id: string) => {
     setAttachments((prev) => prev.filter((attachment) => attachment.id !== id))
   }
@@ -145,6 +194,7 @@ function AppContent() {
                 ref={inputRef}
                 onMouseDown={handleMouseDown}
                 onScreenshot={handleScreenshot}
+                onAttach={handleAttach}
                 onOpenSettings={() => setActivePanel('settings')}
               />
             </>

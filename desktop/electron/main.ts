@@ -1,4 +1,13 @@
-import { app, BrowserWindow, ipcMain, screen, globalShortcut, desktopCapturer, clipboard } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  screen,
+  globalShortcut,
+  desktopCapturer,
+  clipboard,
+  dialog,
+} from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { setupAuthHandlers } from './auth-handlers'
@@ -118,6 +127,79 @@ const defaultShortcuts: Record<ShortcutAction, string> = {
 }
 
 const defaultScreenshotShortcut = isMac ? 'Cmd+Shift+S' : 'Ctrl+Shift+S'
+const imageMimeTypes: Record<string, string> = {
+  '.apng': 'image/apng',
+  '.avif': 'image/avif',
+  '.bmp': 'image/bmp',
+  '.gif': 'image/gif',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.jfif': 'image/jpeg',
+  '.pjpeg': 'image/jpeg',
+  '.pjp': 'image/jpeg',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
+}
+
+type PickedAttachment = {
+  kind: 'image' | 'file'
+  mimeType: string
+  name: string
+  size: number
+  filePath: string
+  dataUrl?: string
+}
+
+ipcMain.handle('attachments:pick', async () => {
+  if (!win) {
+    throw new Error('Main window is not available')
+  }
+
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    title: 'Select attachments',
+    buttonLabel: 'Attach',
+    properties: ['openFile', 'multiSelections'],
+  })
+
+  if (canceled || filePaths.length === 0) {
+    return []
+  }
+
+  const results = await Promise.allSettled<PickedAttachment | null>(
+    filePaths.map(async (filePath) => {
+      const extension = path.extname(filePath).toLowerCase()
+      const imageMimeType = imageMimeTypes[extension]
+      const isImage = Boolean(imageMimeType)
+      const mimeType = imageMimeType ?? 'application/octet-stream'
+      const stats = await fs.promises.stat(filePath)
+      const dataUrl = isImage
+        ? `data:${mimeType};base64,${(await fs.promises.readFile(filePath)).toString('base64')}`
+        : undefined
+
+      return {
+        kind: isImage ? 'image' : 'file',
+        mimeType,
+        name: path.basename(filePath),
+        size: stats.size,
+        filePath,
+        dataUrl,
+      } satisfies PickedAttachment
+    }),
+  )
+
+  return results
+    .map((result) => {
+      if (result.status !== 'fulfilled') {
+        console.error('Failed to load attachment', result.reason)
+        return null
+      }
+
+      return result.value
+    })
+    .filter((value): value is PickedAttachment => Boolean(value))
+})
+
 
 function storageFilePath(fileName: string) {
   const appData = app.getPath('userData')

@@ -98,6 +98,20 @@ contextBridge.exposeInMainWorld('screenshot', {
   }
 })
 
+contextBridge.exposeInMainWorld('attachments', {
+  pickFiles: () =>
+    ipcRenderer.invoke('attachments:pick') as Promise<
+      Array<{
+        kind: 'image' | 'file'
+        mimeType: string
+        name: string
+        size: number
+        filePath: string
+        dataUrl?: string
+      }>
+    >,
+})
+
 contextBridge.exposeInMainWorld('shortcutControl', {
   getAll: () => ipcRenderer.invoke('shortcuts:get') as Promise<ShortcutState>,
   update: (action: ShortcutAction, shortcut: string | null) =>
