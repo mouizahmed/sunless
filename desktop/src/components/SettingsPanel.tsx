@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button'
-import { CornerDownLeft, MonitorCog, Bell, GripVertical, Keyboard } from 'lucide-react'
+import PanelBar from '@/components/PanelBar'
+import { CornerDownLeft, MonitorCog, Bell, Keyboard } from 'lucide-react'
 import {
   useCallback,
   useEffect,
@@ -29,6 +30,7 @@ type ShortcutState = {
 
 type ShortcutGroup = {
   title: string
+  layout?: 'two-column'
   actions: Array<{
     key: ShortcutAction
     label: string
@@ -42,13 +44,14 @@ const shortcutGroups: ShortcutGroup[] = [
     actions: [
       {
         key: 'toggleVisibility',
-        label: 'Toggle Sunless',
+        label: 'Toggle Floating Bar',
         description: 'Show or hide the floating bar from anywhere.',
       },
     ],
   },
   {
     title: 'Window Position',
+    layout: 'two-column',
     actions: [
       {
         key: 'moveUp',
@@ -87,7 +90,7 @@ const sections = [
   {
     key: 'behaviour',
     title: 'Behaviour',
-    description: 'Control when Sunless launches and how it responds.',
+    description: 'Control when the app launches and how it responds.',
     icon: MonitorCog,
     actions: [
       { label: 'Launch on Startup', hint: 'Coming soon' },
@@ -97,7 +100,7 @@ const sections = [
   {
     key: 'notifications',
     title: 'Notifications',
-    description: 'Choose how Sunless lets you know about updates.',
+    description: 'Choose how the app lets you know about updates.',
     icon: Bell,
     actions: [{ label: 'Desktop Alerts', hint: 'Coming soon' }],
   },
@@ -209,7 +212,7 @@ export default function SettingsPanel({
         setError(
           loadError instanceof Error
             ? loadError.message
-            : 'Failed to load shortcuts. Please restart Sunless.',
+            : 'Failed to load shortcuts. Please restart the app.',
         )
       })
       .finally(() => {
@@ -288,40 +291,25 @@ export default function SettingsPanel({
   )
 
   return (
-    <div className="flex w-full flex-col gap-4 rounded-xl border border-white/10 bg-black/50 p-4 text-white backdrop-blur-xl">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-3">
-            <div
-              className="flex items-center rounded-md bg-white/5 p-1 text-white/40 hover:text-white/70"
-              onMouseDown={onMouseDown}
-            >
-              <GripVertical className="h-4 w-4" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.28em] text-white/40">
-                Sunless
-              </span>
-              <h2 className="text-lg font-medium text-white">
-                Settings
-              </h2>
-            </div>
-          </div>
+    <div className="flex w-full flex-col gap-3">
+      <PanelBar
+        onMouseDown={onMouseDown}
+        title="Settings"
+        endAdornment={
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8 shrink-0 rounded-md bg-white/10 p-0 text-white hover:bg-white/20 hover:text-white"
+            onClick={onClose}
+            title="Return to bar"
+          >
+            <CornerDownLeft className="h-4 w-4" />
+          </Button>
+        }
+      />
 
-        </div>
-
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          className="h-8 w-8 shrink-0 rounded-md bg-white/5 text-white/70 hover:bg-white/10 hover:text-white"
-          onClick={onClose}
-        >
-          <CornerDownLeft className="h-4 w-4" />
-        </Button>
-      </div>
-
-      <div className="grid gap-3 text-sm text-white/80">
+      <div className="attachments-scrollbar flex max-h-[420px] flex-col gap-3 overflow-y-auto rounded-xl border border-white/10 bg-black/50 p-4 text-sm text-white/80 backdrop-blur-xl">
         <div className="flex flex-col gap-3 rounded-lg border border-white/10 bg-white/5 p-3">
           <div className="flex items-start gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-black/50 text-white/60">
@@ -332,7 +320,7 @@ export default function SettingsPanel({
                 Keybinds
               </h3>
               <p className="text-xs text-white/60">
-                Manage the global shortcuts registered by Sunless.
+                Manage the global shortcuts registered by the floating bar.
               </p>
             </div>
           </div>
@@ -366,7 +354,13 @@ export default function SettingsPanel({
                         {group.title}
                       </span>
 
-                      <div className="flex flex-col gap-2">
+                      <div
+                        className={
+                          group.layout === 'two-column'
+                            ? 'grid gap-2 sm:grid-cols-2'
+                            : 'flex flex-col gap-2'
+                        }
+                      >
                         {group.actions.map((action) => {
                           const currentValue = shortcutState.current[action.key]
                           const defaultValue = shortcutState.defaults[action.key]
@@ -399,7 +393,7 @@ export default function SettingsPanel({
                           return (
                             <div
                               key={action.key}
-                              className="flex flex-col gap-2 rounded-md border border-white/10 bg-black/30 p-3 sm:flex-row sm:items-center sm:justify-between"
+                              className="flex h-full flex-col gap-2 rounded-md border border-white/10 bg-black/30 p-3 sm:flex-row sm:items-center sm:justify-between"
                             >
                               <div className="flex flex-col">
                                 <span className="text-sm font-medium text-white">
@@ -493,29 +487,28 @@ export default function SettingsPanel({
             </div>
           </div>
         ))}
-      </div>
+        <div className="h-px w-full bg-white/10" />
 
-      <div className="h-px w-full bg-white/10" />
-
-      <div className="flex flex-col gap-2 rounded-lg border border-white/10 bg-white/5 p-3">
-        <div className="flex flex-wrap items-center gap-2 text-sm text-white/70">
-          <Button
-            type="button"
-            variant="outline"
-            className="flex-1 min-w-[12rem] bg-white/10 p-0 text-white hover:bg-white/20 hover:text-white"
-            onClick={onLogout}
-          >
-            Log out on this device
-          </Button>
-          <div className="h-8 w-px bg-white/15 sm:h-auto sm:self-stretch" />
-          <Button
-            type="button"
-            variant="outline"
-            className="flex-1 min-w-[12rem] bg-white/10 p-0 text-white hover:bg-white/20 hover:text-white"
-            onClick={onLogoutEverywhere}
-          >
-            Log out everywhere
-          </Button>
+        <div className="flex flex-col gap-2 rounded-lg border border-white/10 bg-white/5 p-3">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-white/70">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 min-w-[12rem] bg-white/10 p-0 text-white hover:bg-white/20 hover:text-white"
+              onClick={onLogout}
+            >
+              Log out on this device
+            </Button>
+            <div className="h-8 w-px bg-white/15 sm:h-auto sm:self-stretch" />
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 min-w-[12rem] bg-white/10 p-0 text-white hover:bg-white/20 hover:text-white"
+              onClick={onLogoutEverywhere}
+            >
+              Log out everywhere
+            </Button>
+          </div>
         </div>
       </div>
     </div>

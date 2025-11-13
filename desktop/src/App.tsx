@@ -132,14 +132,12 @@ function AppContent() {
           className="flex w-full flex-col items-stretch gap-1.5 overflow-hidden"
         >
           {activePanel === 'settings' ? (
-            <div className="attachments-scrollbar max-h-full w-full overflow-y-auto overscroll-contain pr-1">
-              <SettingsPanel
-                onClose={() => setActivePanel('main')}
-                onMouseDown={handleMouseDown}
-                onLogout={logout}
-                onLogoutEverywhere={logoutEverywhere}
-              />
-            </div>
+            <SettingsPanel
+              onClose={() => setActivePanel('main')}
+              onMouseDown={handleMouseDown}
+              onLogout={logout}
+              onLogoutEverywhere={logoutEverywhere}
+            />
           ) : (
             <>
               <AttachmentsBar attachments={attachments} onRemoveAttachment={handleRemoveAttachment} />
