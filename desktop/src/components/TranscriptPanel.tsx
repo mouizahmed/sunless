@@ -75,7 +75,7 @@ export default function TranscriptPanel({
   return (
     <div className={cn(containerClassName, className)}>
       {content ? (
-        <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 px-4 py-6 text-sm text-white/70">
+        <div className="rounded-2xl border border-dashed border-white/15 bg-white/15 px-4 py-6 text-sm text-white/70">
           {content}
         </div>
       ) : (
@@ -87,7 +87,7 @@ export default function TranscriptPanel({
               <div
                 key={segment.id}
                 className={cn(
-                  'rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 shadow-[0_2px_8px_rgba(0,0,0,0.25)]',
+                  'rounded-2xl border border-white/10 bg-white/15 px-3 py-2 text-sm text-white/80 shadow-[0_2px_8px_rgba(0,0,0,0.25)]',
                   segment.pending && 'opacity-80',
                 )}
               >

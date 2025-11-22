@@ -22,7 +22,7 @@ export default function LiveResponsePanel({
   return (
     <div
       className={cn(
-        'rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white backdrop-blur-xl',
+        'rounded-2xl border border-white/10 bg-white/15 px-4 py-3 text-sm text-white backdrop-blur-xl',
         className,
       )}
     >
@@ -30,7 +30,7 @@ export default function LiveResponsePanel({
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs uppercase tracking-wide text-white/50">Response Idea</span>
-            <span className="rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white/70">
+            <span className="rounded-full border border-white/15 bg-white/20 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white/70">
               Live
             </span>
           </div>
@@ -40,7 +40,7 @@ export default function LiveResponsePanel({
         <button
           type="button"
           onClick={onClear}
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white/60 transition hover:border-white/25 hover:bg-white/15 hover:text-white"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/20 text-white/60 transition hover:border-white/25 hover:bg-white/15 hover:text-white"
           aria-label="Clear suggested response"
         >
           <X className="size-3.5" />
@@ -53,7 +53,7 @@ export default function LiveResponsePanel({
             key={prompt}
             type="button"
             variant="ghost"
-            className="w-full justify-start rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left text-sm text-white/80 transition hover:border-white/25 hover:bg-white/10 hover:text-white"
+            className="w-full justify-start rounded-xl border border-white/10 bg-white/15 px-3 py-2 text-left text-sm text-white/80 transition hover:border-white/25 hover:bg-white/20 hover:text-white"
             onClick={() => onUseSuggestion(prompt)}
           >
             {prompt}

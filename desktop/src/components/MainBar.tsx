@@ -54,7 +54,7 @@ function MainBar({
                 onStartSession()
               }
             }}
-            className="flex h-8 w-10 shrink-0 items-center justify-center rounded-md border border-white/15 bg-white/10 text-white shadow-[0_1px_3px_rgba(0,0,0,0.35)] transition hover:cursor-pointer hover:bg-white/20 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+            className="flex h-8 w-10 shrink-0 items-center justify-center rounded-md border border-white/15 bg-white/20 text-white shadow-[0_1px_3px_rgba(0,0,0,0.35)] transition hover:cursor-pointer hover:bg-white/20 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
             title="Start session"
             aria-label="Start session"
           >
@@ -78,7 +78,7 @@ function MainBar({
                 className={isPaused ? 'text-white/60' : 'text-white'}
               />
             </div>
-            <div className="flex h-8 shrink-0 overflow-hidden rounded-md border border-white/20 bg-white/10 text-white shadow-[0_1px_3px_rgba(0,0,0,0.35)]">
+            <div className="flex h-8 shrink-0 overflow-hidden rounded-md border border-white/20 bg-white/20 text-white shadow-[0_1px_3px_rgba(0,0,0,0.35)]">
               <Button
                 type="button"
                 size="icon-sm"
@@ -122,7 +122,7 @@ function MainBar({
           <Button
             size="icon"
             variant="ghost"
-            className="h-8 w-8 shrink-0 rounded-md bg-white/10 p-0 text-white hover:bg-white/20 hover:text-white"
+            className="h-8 w-8 shrink-0 rounded-md bg-white/20 p-0 text-white hover:bg-white/20 hover:text-white"
             title="Capturing full screenshot"
             aria-live="polite"
             aria-busy="true"
@@ -134,7 +134,7 @@ function MainBar({
         <Button
           size="icon"
           variant="ghost"
-          className="h-8 w-8 shrink-0 rounded-md bg-white/10 p-0 text-white hover:bg-white/20 hover:text-white"
+          className="h-8 w-8 shrink-0 rounded-md bg-white/20 p-0 text-white hover:bg-white/20 hover:text-white"
           title="Screenshot"
           onClick={onScreenshot}
         >
@@ -144,7 +144,7 @@ function MainBar({
         <Button
           size="icon"
           variant="ghost"
-          className="h-8 w-8 shrink-0 rounded-md bg-white/10 p-0 text-white hover:bg-white/20 hover:text-white"
+          className="h-8 w-8 shrink-0 rounded-md bg-white/20 p-0 text-white hover:bg-white/20 hover:text-white"
           title="Attach"
           onClick={onAttach}
         >
@@ -153,7 +153,7 @@ function MainBar({
         <Button
           size="icon"
           variant="ghost"
-          className="h-8 w-8 shrink-0 rounded-md bg-white/10 p-0 text-white hover:bg-white/20 hover:text-white"
+          className="h-8 w-8 shrink-0 rounded-md bg-white/20 p-0 text-white hover:bg-white/20 hover:text-white"
           title="History"
           onClick={onOpenHistory}
         >
@@ -162,7 +162,7 @@ function MainBar({
         <Button
           size="icon"
           variant="ghost"
-          className="h-8 w-8 shrink-0 rounded-md bg-white/10 p-0 text-white hover:bg-white/20 hover:text-white"
+          className="h-8 w-8 shrink-0 rounded-md bg-white/20 p-0 text-white hover:bg-white/20 hover:text-white"
           title="Settings"
           onClick={onOpenSettings}
         >

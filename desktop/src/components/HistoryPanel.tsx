@@ -108,7 +108,7 @@ export default function HistoryPanel({
               type="button"
               size="icon"
               variant="ghost"
-              className="h-8 w-8 shrink-0 rounded-md bg-white/10 p-0 text-white hover:bg-white/20 hover:text-white"
+              className="h-8 w-8 shrink-0 rounded-md bg-white/20 p-0 text-white hover:bg-white/20 hover:text-white"
               onClick={onRefreshSessions}
               title="Refresh history"
               aria-label="Refresh history"
@@ -119,7 +119,7 @@ export default function HistoryPanel({
               type="button"
               size="icon"
               variant="ghost"
-              className="h-8 w-8 shrink-0 rounded-md bg-white/10 p-0 text-white hover:bg-white/20 hover:text-white"
+              className="h-8 w-8 shrink-0 rounded-md bg-white/20 p-0 text-white hover:bg-white/20 hover:text-white"
               onClick={onClose}
               title="Return to chat"
               aria-label="Return to chat"
@@ -174,7 +174,7 @@ export default function HistoryPanel({
               </Button>
             </div>
           ) : showSessionListEmptyState ? (
-            <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-white/15 bg-white/5 px-3 py-6 text-center text-xs text-white/70">
+            <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-white/15 bg-white/15 px-3 py-6 text-center text-xs text-white/70">
               <span>No sessions yet.</span>
               <span className="mt-1 block text-[11px] text-white/50">
                 Start a new chat to see it appear here.
@@ -199,7 +199,7 @@ export default function HistoryPanel({
                       'flex w-full flex-col gap-1.5 rounded-xl border px-3 py-2 text-left text-xs transition disabled:cursor-not-allowed disabled:opacity-70',
                       isActive
                         ? 'border-white/40 bg-white/15 text-white shadow-[0_2px_8px_rgba(0,0,0,0.35)]'
-                        : 'border-white/10 bg-white/5 text-white/75 hover:border-white/20 hover:bg-white/10 hover:text-white',
+                        : 'border-white/10 bg-white/15 text-white/75 hover:border-white/20 hover:bg-white/20 hover:text-white',
                     )}
                   >
                     <div className="flex w-full items-center justify-between text-[11px] uppercase tracking-wide">
@@ -236,7 +236,7 @@ export default function HistoryPanel({
                   }
                 }}
                 className={cn(
-                  'h-8 rounded-full border border-white/10 bg-white/5 px-2 text-[11px] text-white/60 transition hover:border-white/20 hover:bg-white/10 hover:text-white',
+                  'h-8 rounded-full border border-white/10 bg-white/15 px-2 text-[11px] text-white/60 transition hover:border-white/20 hover:bg-white/20 hover:text-white',
                   pageIndex === 0 && 'pointer-events-none opacity-50',
                 )}
                 style={{ color: paginationTextColor }}
@@ -252,7 +252,7 @@ export default function HistoryPanel({
                       href="#"
                       size="default"
                       isActive={pageNumber === currentPage}
-                      className="h-8 rounded-full border border-white/10 bg-white/5 px-3 text-[11px] text-white/60 transition hover:border-white/20 hover:bg-white/10 hover:text-white data-[active=true]:border-white/25 data-[active=true]:bg-white/15 data-[active=true]:text-white"
+                      className="h-8 rounded-full border border-white/10 bg-white/15 px-3 text-[11px] text-white/60 transition hover:border-white/20 hover:bg-white/20 hover:text-white data-[active=true]:border-white/25 data-[active=true]:bg-white/15 data-[active=true]:text-white"
                       style={{ color: pageNumber === currentPage ? paginationActiveColor : paginationTextColor }}
                       onClick={(event) => {
                         event.preventDefault()
@@ -269,7 +269,7 @@ export default function HistoryPanel({
                 items.push(
                   <PaginationItem key={`ellipsis-${key}`}>
                     <PaginationEllipsis
-                      className="h-8 min-w-[32px] rounded-full border border-white/10 bg-white/5 px-3 text-[11px]"
+                      className="h-8 min-w-[32px] rounded-full border border-white/10 bg-white/15 px-3 text-[11px]"
                       style={{ color: paginationTextColor }}
                     />
                   </PaginationItem>,
@@ -314,7 +314,7 @@ export default function HistoryPanel({
                   }
                 }}
                 className={cn(
-                  'h-8 rounded-full border border-white/10 bg-white/5 px-2 text-[11px] text-white/60 transition hover:border-white/20 hover:bg-white/10 hover:text-white',
+                  'h-8 rounded-full border border-white/10 bg-white/15 px-2 text-[11px] text-white/60 transition hover:border-white/20 hover:bg-white/20 hover:text-white',
                   pageIndex + 1 >= totalPages && 'pointer-events-none opacity-50',
                 )}
                 style={{ color: paginationTextColor }}

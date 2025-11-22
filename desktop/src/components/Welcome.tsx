@@ -10,7 +10,7 @@ type WelcomeProps = {
 }
 
 const AUTH_BUTTON_CLASSES =
-  'h-9 w-full rounded-md border border-white/15 bg-white/10 px-4 text-sm font-medium text-white shadow-[0_12px_30px_-18px_rgba(0,0,0,0.85)] transition hover:bg-white/20 hover:text-white focus-visible:border-white/30 focus-visible:ring-1 focus-visible:ring-white/20 disabled:cursor-not-allowed disabled:opacity-60'
+  'h-9 w-full rounded-md border border-white/15 bg-white/20 px-4 text-sm font-medium text-white shadow-[0_12px_30px_-18px_rgba(0,0,0,0.85)] transition hover:bg-white/20 hover:text-white focus-visible:border-white/30 focus-visible:ring-1 focus-visible:ring-white/20 disabled:cursor-not-allowed disabled:opacity-60'
 
 const Welcome = forwardRef<HTMLDivElement, WelcomeProps>(function Welcome({ onMouseDown }, ref) {
   const {
@@ -25,11 +25,11 @@ const Welcome = forwardRef<HTMLDivElement, WelcomeProps>(function Welcome({ onMo
 
   return (
     <div ref={ref} className="flex w-full items-center justify-center">
-      <div className="flex w-full max-w-xl flex-col gap-4 rounded-xl border border-white/10 bg-black/50 p-4 text-white backdrop-blur-xl">
+      <div className="flex w-full max-w-xl flex-col gap-4 rounded-xl border border-white/10 bg-black/70 p-4 text-white backdrop-blur-xl">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div
-              className="flex items-center rounded-md bg-white/5 p-1 text-white/40 hover:text-white/70"
+              className="flex items-center rounded-md bg-white/15 p-1 text-white/40 hover:text-white/70"
               onMouseDown={onMouseDown}
             >
               <GripVertical className="h-4 w-4" />
@@ -46,7 +46,7 @@ const Welcome = forwardRef<HTMLDivElement, WelcomeProps>(function Welcome({ onMo
           <img
             src="/logo.png"
             alt="Sunless logo"
-            className="h-6 w-6 rounded-md border border-white/10 bg-white/5 object-cover p-0.5"
+            className="h-6 w-6 rounded-md border border-white/10 bg-white/15 object-cover p-0.5"
             draggable={false}
           />
         </div>
@@ -64,7 +64,7 @@ const Welcome = forwardRef<HTMLDivElement, WelcomeProps>(function Welcome({ onMo
         )}
 
         {isWaitingForBrowser && (
-          <div className="flex items-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white/70">
+          <div className="flex items-center gap-2 rounded-lg border border-white/15 bg-white/20 px-3 py-2 text-sm text-white/70">
             <Loader2 className="h-4 w-4 animate-spin text-white/60" />
             <span className="flex-1">
               Complete authentication in your browser, then return to Sunless.

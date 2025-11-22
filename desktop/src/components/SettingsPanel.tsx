@@ -300,7 +300,7 @@ export default function SettingsPanel({
             type="button"
             size="icon"
             variant="ghost"
-            className="h-8 w-8 shrink-0 rounded-md bg-white/10 p-0 text-white hover:bg-white/20 hover:text-white"
+            className="h-8 w-8 shrink-0 rounded-md bg-white/20 p-0 text-white hover:bg-white/20 hover:text-white"
             onClick={onClose}
             title="Return to bar"
           >
@@ -309,10 +309,10 @@ export default function SettingsPanel({
         }
       />
 
-      <div className="attachments-scrollbar flex max-h-[420px] flex-col gap-1.5 overflow-y-auto rounded-xl border border-white/10 bg-black/50 p-4 text-sm text-white/80 backdrop-blur-xl">
-        <div className="flex flex-col gap-1.5 rounded-lg border border-white/10 bg-white/5 p-3">
+      <div className="attachments-scrollbar flex max-h-[420px] flex-col gap-1.5 overflow-y-auto rounded-xl border border-white/10 bg-black/70 p-4 text-sm text-white/80 backdrop-blur-xl">
+        <div className="flex flex-col gap-1.5 rounded-lg border border-white/10 bg-white/15 p-3">
           <div className="flex items-start gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-black/50 text-white/60">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-black/70 text-white/60">
               <Keyboard className="h-4 w-4" />
             </div>
             <div className="flex flex-col">
@@ -393,7 +393,7 @@ export default function SettingsPanel({
                           return (
                             <div
                               key={action.key}
-                              className="flex h-full flex-col gap-2 rounded-md border border-white/10 bg-black/30 p-3 sm:flex-row sm:items-center sm:justify-between"
+                              className="flex h-full flex-col gap-2 rounded-md border border-white/10 bg-black/60 p-3 sm:flex-row sm:items-center sm:justify-between"
                             >
                               <div className="flex flex-col">
                                 <span className="text-sm font-medium text-white">
@@ -412,7 +412,7 @@ export default function SettingsPanel({
                                   <Button
                                     type="button"
                                     variant="secondary"
-                                    className="bg-white/10 text-white hover:bg-white/15 hover:text-white"
+                                    className="bg-white/20 text-white hover:bg-white/15 hover:text-white"
                                     disabled={recordButtonDisabled}
                                     onClick={() => handleRecordToggle(action.key)}
                                   >
@@ -421,7 +421,7 @@ export default function SettingsPanel({
                                   <Button
                                     type="button"
                                     variant="outline"
-                                    className="text-white/80 hover:bg-white/10 hover:text-white"
+                                    className="text-white/80 hover:bg-white/20 hover:text-white"
                                     disabled={resetDisabled}
                                     onClick={() => handleReset(action.key)}
                                   >
@@ -448,11 +448,11 @@ export default function SettingsPanel({
         {sections.map(({ key, title, description, icon: Icon, actions }) => (
           <div
             key={key}
-            className="flex flex-col gap-1.5 rounded-lg border border-white/10 bg-white/5 p-3"
+            className="flex flex-col gap-1.5 rounded-lg border border-white/10 bg-white/15 p-3"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-black/50 text-white/60">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-black/70 text-white/60">
                   <Icon className="h-4 w-4" />
                 </div>
                 <div className="flex flex-col">
@@ -474,11 +474,11 @@ export default function SettingsPanel({
                   variant="outline"
                   size="sm"
                   disabled
-                  className="border-white/15 bg-white/5 text-white/70 hover:bg-white/10"
+                  className="border-white/15 bg-white/15 text-white/70 hover:bg-white/20"
                 >
                   {label}
                   {hint && (
-                    <span className="ml-2 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white/50">
+                    <span className="ml-2 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white/50">
                       {hint}
                     </span>
                   )}
@@ -487,14 +487,14 @@ export default function SettingsPanel({
             </div>
           </div>
         ))}
-        <div className="h-px w-full bg-white/10" />
+        <div className="h-px w-full bg-white/20" />
 
-        <div className="flex flex-col gap-2 rounded-lg border border-white/10 bg-white/5 p-3">
+        <div className="flex flex-col gap-2 rounded-lg border border-white/10 bg-white/15 p-3">
           <div className="flex flex-wrap items-center gap-2 text-sm text-white/70">
             <Button
               type="button"
               variant="outline"
-              className="flex-1 min-w-[12rem] bg-white/10 p-0 text-white hover:bg-white/20 hover:text-white"
+              className="flex-1 min-w-[12rem] bg-white/20 p-0 text-white hover:bg-white/20 hover:text-white"
               onClick={onLogout}
             >
               Log out on this device
@@ -503,7 +503,7 @@ export default function SettingsPanel({
             <Button
               type="button"
               variant="outline"
-              className="flex-1 min-w-[12rem] bg-white/10 p-0 text-white hover:bg-white/20 hover:text-white"
+              className="flex-1 min-w-[12rem] bg-white/20 p-0 text-white hover:bg-white/20 hover:text-white"
               onClick={onLogoutEverywhere}
             >
               Log out everywhere

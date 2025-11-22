@@ -183,7 +183,7 @@ function ChatPanel({
               onClick={handleOpen}
               className="flex w-full items-start gap-3 rounded-xl border border-white/15 bg-black/70 px-3 py-2 text-left text-xs text-white/80 transition hover:border-white/30 hover:bg-black/80"
             >
-              <span className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/10">
+              <span className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
                 <FileText className="h-3.5 w-3.5" />
               </span>
               <span className="flex-1 space-y-0.5">
@@ -210,7 +210,7 @@ function ChatPanel({
           className="attachments-scrollbar max-h-60 space-y-1 overflow-y-auto pr-1"
         >
           {messages.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-white/20 bg-white/5 px-4 py-6 text-sm text-white/70">
+            <div className="rounded-2xl border border-dashed border-white/20 bg-white/15 px-4 py-6 text-sm text-white/70">
               No messages yet — kick things off with a quick question or let Sunless know what to keep an eye on.
             </div>
           ) : (
@@ -219,7 +219,7 @@ function ChatPanel({
               if (message.searching) {
                 return (
                   <Message key={message.id} from={isAssistant ? 'assistant' : 'user'} className="w-full">
-                    <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/70">
+                    <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/15 px-3 py-2 text-xs text-white/70">
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       <span>Searching the web…</span>
                     </div>
@@ -249,7 +249,7 @@ function ChatPanel({
                     ) : hasContent ? (
                       <MessageContent
                         className={cn(
-                          'border border-white/10 bg-white/5 text-sm leading-relaxed text-white shadow-[0_4px_12px_rgba(0,0,0,0.35)]',
+                          'border border-white/10 bg-white/15 text-sm leading-relaxed text-white shadow-[0_4px_12px_rgba(0,0,0,0.35)]',
                           'group-[.is-user]:bg-white group-[.is-user]:text-black',
                           message.pending && 'opacity-90',
                         )}
@@ -299,7 +299,7 @@ function ChatPanel({
                 variant="ghost"
                 size="sm"
                 onClick={() => handleQuickReply(reply)}
-                className="h-8 justify-center rounded-full border border-white/15 bg-white/5 px-2 text-white/70 shadow-none transition hover:border-white/30 hover:bg-white/10 hover:text-white whitespace-nowrap overflow-hidden !text-xs leading-tight"
+                className="h-8 justify-center rounded-full border border-white/15 bg-white/15 px-2 text-white/70 shadow-none transition hover:border-white/30 hover:bg-white/20 hover:text-white whitespace-nowrap overflow-hidden !text-xs leading-tight"
               >
                 {reply}
               </Button>
@@ -307,7 +307,7 @@ function ChatPanel({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-3">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/15 p-3">
           <div className="flex items-center gap-2">
             <textarea
               value={draft}
@@ -315,14 +315,14 @@ function ChatPanel({
               onKeyDown={handleKeyDown}
               rows={1}
               placeholder="Ask for a recap, highlight, or next step…"
-              className="max-h-24 min-h-[32px] flex-1 resize-none rounded-md border border-white/15 bg-white/5 px-3 py-1.5 text-sm leading-tight text-white placeholder:text-white/50 shadow-[0_1px_3px_rgba(0,0,0,0.35)] transition focus:border-white/35 focus:outline-none focus:ring-2 focus:ring-white/25"
+              className="max-h-24 min-h-[32px] flex-1 resize-none rounded-md border border-white/15 bg-white/15 px-3 py-1.5 text-sm leading-tight text-white placeholder:text-white/50 shadow-[0_1px_3px_rgba(0,0,0,0.35)] transition focus:border-white/35 focus:outline-none focus:ring-2 focus:ring-white/25"
             />
             <Button
               type="submit"
               size="icon-sm"
               variant="ghost"
               disabled={!canSend}
-              className="h-8 w-8 shrink-0 rounded-md bg-white/10 p-0 text-white transition hover:bg-white/20 hover:text-white"
+              className="h-8 w-8 shrink-0 rounded-md bg-white/20 p-0 text-white transition hover:bg-white/20 hover:text-white"
             >
               <Send className="h-4 w-4" />
             </Button>

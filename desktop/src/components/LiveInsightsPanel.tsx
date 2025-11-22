@@ -91,7 +91,7 @@ function formatRelativeTime(timestamp: number) {
 
 function InsightBadge({ children }: { children: string }) {
   return (
-    <span className="rounded-full border border-white/20 bg-white/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white/70">
+    <span className="rounded-full border border-white/20 bg-white/20 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white/70">
       {children}
     </span>
   )
@@ -99,7 +99,7 @@ function InsightBadge({ children }: { children: string }) {
 
 function EmptyState() {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-6 text-sm text-white/60">
+    <div className="rounded-xl border border-white/10 bg-white/15 px-4 py-6 text-sm text-white/60">
       I’ll show live insights here as I analyze your activity.
     </div>
   )
@@ -146,7 +146,7 @@ export default function LiveInsightsPanel({
         </div>
 
         {processing && status === 'live' ? (
-          <div className="flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[11px] text-white/70">
+          <div className="flex items-center gap-1 rounded-full border border-white/20 bg-white/20 px-2.5 py-1 text-[11px] text-white/70">
             <Loader2 className="size-3 animate-spin text-white/80" />
             <span>Processing…</span>
           </div>
@@ -157,7 +157,7 @@ export default function LiveInsightsPanel({
         <EmptyState />
       ) : (
         <div className="space-y-3">
-          <div className="rounded-2xl border border-white/15 bg-white/5 p-4 text-sm text-white shadow-[0_4px_18px_rgba(0,0,0,0.4)]">
+          <div className="rounded-2xl border border-white/15 bg-white/15 p-4 text-sm text-white shadow-[0_4px_18px_rgba(0,0,0,0.4)]">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <p className="text-xs uppercase tracking-wide text-white/50">Latest insight</p>
@@ -186,7 +186,7 @@ export default function LiveInsightsPanel({
                 <ul className="space-y-1.5">
                   {primaryInsight.summaryPoints.map((point) => (
                     <li key={point} className="flex items-start gap-2">
-                      <span className="mt-1.5 inline-block size-1.5 rounded-full bg-white/50" aria-hidden />
+                      <span className="mt-1.5 inline-block size-1.5 rounded-full bg-white/150" aria-hidden />
                       <span className="text-sm text-white/80">{point}</span>
                     </li>
                   ))}
@@ -220,7 +220,7 @@ export default function LiveInsightsPanel({
                   )}
                 </button>
                 {expandedInsightId === primaryInsight.id ? (
-                  <div className="mt-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/65">
+                  <div className="mt-2 rounded-xl border border-white/10 bg-white/15 px-3 py-2 text-xs text-white/65">
                     {primaryInsight.details}
                   </div>
                 ) : null}
@@ -236,7 +236,7 @@ export default function LiveInsightsPanel({
                       key={action.id}
                       type="button"
                       onClick={() => onSelectAction?.(primaryInsight, action)}
-                      className="flex w-full items-start gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-left text-sm text-white/80 transition hover:border-white/25 hover:bg-white/10 hover:text-white"
+                      className="flex w-full items-start gap-2 rounded-2xl border border-white/10 bg-white/15 px-3 py-2 text-left text-sm text-white/80 transition hover:border-white/25 hover:bg-white/20 hover:text-white"
                     >
                       <span className="mt-1 inline-flex size-1.5 rounded-full bg-emerald-400" aria-hidden />
                       <span className="flex-1">
@@ -257,7 +257,7 @@ export default function LiveInsightsPanel({
                   type="button"
                   size="sm"
                   variant="ghost"
-                  className="h-8 gap-1 rounded-full border border-white/10 bg-white/5 px-3 text-xs text-white/70 transition hover:border-white/25 hover:bg-white/10 hover:text-white"
+                  className="h-8 gap-1 rounded-full border border-white/10 bg-white/15 px-3 text-xs text-white/70 transition hover:border-white/25 hover:bg-white/20 hover:text-white"
                   onClick={() => onOpenInsightInChat(primaryInsight)}
                 >
                   <MessageSquare className="size-3.5" />
@@ -268,7 +268,7 @@ export default function LiveInsightsPanel({
           </div>
 
           {history.length > 0 ? (
-            <div className="rounded-2xl border border-white/10 bg-black/30 p-3">
+            <div className="rounded-2xl border border-white/10 bg-black/60 p-3">
               <div className="flex items-center justify-between text-xs text-white/60">
                 <span>Recent insights</span>
                 {history.length > maxCollapsedItems ? (
@@ -350,7 +350,7 @@ export default function LiveInsightsPanel({
                             {isExpanded ? 'Hide details' : 'View details'}
                           </button>
                           {isExpanded ? (
-                            <div className="mt-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-white/65">
+                            <div className="mt-2 rounded-lg border border-white/10 bg-white/15 px-3 py-2 text-[11px] text-white/65">
                               {insight.details}
                             </div>
                           ) : null}
