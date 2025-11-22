@@ -13,7 +13,7 @@ export default function PanelBar({
   endAdornment,
 }: PanelBarProps) {
   return (
-    <div className="flex w-full items-center justify-between gap-2 rounded-lg bg-black/40 px-2.5 py-2 backdrop-blur-xl">
+    <div className="flex w-full items-center justify-between gap-2 rounded-lg bg-black/70 px-2.5 py-2 backdrop-blur-xl">
       <div className="flex items-center gap-2 overflow-hidden">
         <div
           className="flex items-center p-0.5"

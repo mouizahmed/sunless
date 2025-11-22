@@ -36,6 +36,7 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 let win: BrowserWindow | null
 let screenshotWin: BrowserWindow | null = null
 let shouldRestoreMainWindowAfterScreenshot = false
+let isCapturingFullScreenshot = false
 
 function createWindow() {
   win = new BrowserWindow({
@@ -127,19 +128,16 @@ const defaultShortcuts: Record<ShortcutAction, string> = {
 }
 
 const defaultScreenshotShortcut = isMac ? 'Cmd+Shift+S' : 'Ctrl+Shift+S'
+// Only these exact formats are allowed
 const imageMimeTypes: Record<string, string> = {
-  '.apng': 'image/apng',
-  '.avif': 'image/avif',
-  '.bmp': 'image/bmp',
-  '.gif': 'image/gif',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
-  '.jfif': 'image/jpeg',
-  '.pjpeg': 'image/jpeg',
-  '.pjp': 'image/jpeg',
+  '.gif': 'image/gif',
   '.png': 'image/png',
-  '.svg': 'image/svg+xml',
-  '.webp': 'image/webp',
+}
+
+const documentMimeTypes: Record<string, string> = {
+  '.pdf': 'application/pdf',
 }
 
 type PickedAttachment = {
@@ -160,22 +158,37 @@ ipcMain.handle('attachments:pick', async () => {
     title: 'Select attachments',
     buttonLabel: 'Attach',
     properties: ['openFile', 'multiSelections'],
+    filters: [
+      { name: 'Supported Files', extensions: ['jpg', 'jpeg', 'gif', 'png', 'pdf'] },
+      { name: 'Images', extensions: ['jpg', 'jpeg', 'gif', 'png'] },
+      { name: 'PDF', extensions: ['pdf'] },
+    ],
   })
 
   if (canceled || filePaths.length === 0) {
     return []
   }
 
+  const unsupportedFiles: string[] = []
+
   const results = await Promise.allSettled<PickedAttachment | null>(
     filePaths.map(async (filePath) => {
       const extension = path.extname(filePath).toLowerCase()
       const imageMimeType = imageMimeTypes[extension]
+      const documentMimeType = documentMimeTypes[extension]
+      const mimeType = imageMimeType ?? documentMimeType
+
+      // Check if file type is supported
+      if (!mimeType) {
+        unsupportedFiles.push(`${path.basename(filePath)} (${extension})`)
+        return null
+      }
+
       const isImage = Boolean(imageMimeType)
-      const mimeType = imageMimeType ?? 'application/octet-stream'
       const stats = await fs.promises.stat(filePath)
-      const dataUrl = isImage
-        ? `data:${mimeType};base64,${(await fs.promises.readFile(filePath)).toString('base64')}`
-        : undefined
+      const fileBuffer = await fs.promises.readFile(filePath)
+      const base64 = fileBuffer.toString('base64')
+      const dataUrl = `data:${mimeType};base64,${base64}`
 
       return {
         kind: isImage ? 'image' : 'file',
@@ -187,6 +200,16 @@ ipcMain.handle('attachments:pick', async () => {
       } satisfies PickedAttachment
     }),
   )
+
+  // Show error dialog if there are unsupported files
+  if (unsupportedFiles.length > 0) {
+    const fileList = unsupportedFiles.join('\n')
+
+    dialog.showErrorBox(
+      'Unsupported File Type',
+      `The following files are not supported:\n\n${fileList}\n\nOnly these formats are supported:\n• JPEG (.jpg, .jpeg)\n• GIF (.gif)\n• PNG (.png)\n• PDF (.pdf)`
+    )
+  }
 
   return results
     .map((result) => {
@@ -398,6 +421,111 @@ function startScreenshotCapture() {
   createScreenshotWindow(targetDisplay)
 }
 
+async function captureAllDisplays(): Promise<boolean> {
+  const displays = screen.getAllDisplays()
+  if (displays.length === 0) {
+    return false
+  }
+
+  if (screenshotWin && !screenshotWin.isDestroyed()) {
+    closeScreenshotWindow()
+  }
+
+  const results: Array<{ image: Electron.NativeImage; dataUrl: string; displayId: string }> = []
+
+  try {
+    for (const display of displays) {
+      const displayIdString = String(display.id)
+      const physicalWidth = Math.max(
+        1,
+        Math.round(display.bounds.width * display.scaleFactor),
+      )
+      const physicalHeight = Math.max(
+        1,
+        Math.round(display.bounds.height * display.scaleFactor),
+      )
+
+      const sources = await desktopCapturer.getSources({
+        types: ['screen'],
+        thumbnailSize: {
+          width: physicalWidth,
+          height: physicalHeight,
+        },
+      })
+
+      const source = sources.find((candidate) => {
+        if (candidate.display_id === displayIdString) return true
+        const idSegments = candidate.id.split(':')
+        return idSegments.includes(displayIdString)
+      })
+
+      if (!source) {
+        console.warn(`Full capture: display ${displayIdString} has no matching source`)
+        continue
+      }
+
+      const image = source.thumbnail
+
+      if (image.isEmpty()) {
+        console.warn(`Full capture: display ${displayIdString} returned empty thumbnail`)
+        continue
+      }
+
+      const pngBuffer = image.toPNG()
+      if (!pngBuffer || pngBuffer.length === 0) {
+        console.warn(`Full capture: display ${displayIdString} produced empty PNG buffer`)
+        continue
+      }
+
+      results.push({
+        image,
+        dataUrl: `data:image/png;base64,${pngBuffer.toString('base64')}`,
+        displayId: displayIdString,
+      })
+    }
+
+    if (results.length === 0) {
+      return false
+    }
+
+    clipboard.writeImage(results[0].image)
+
+    for (const result of results) {
+      win?.webContents.send('screenshot-result', {
+        dataUrl: result.dataUrl,
+        displayId: result.displayId,
+      })
+    }
+
+    return true
+  } catch (error) {
+    console.error('Failed to capture full-screen screenshot', error)
+    return false
+  }
+}
+
+async function handleFullScreenshotShortcut() {
+  if (isCapturingFullScreenshot) {
+    return
+  }
+
+  isCapturingFullScreenshot = true
+  let success = false
+
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('screenshot-full-start')
+  }
+
+  try {
+    success = await captureAllDisplays()
+  } finally {
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('screenshot-full-complete', { success })
+    }
+    isCapturingFullScreenshot = false
+  }
+}
+
 function registerMovementShortcuts() {
   Object.keys(movementActions).forEach((action) => {
     const keybind = shortcuts[action as keyof typeof shortcuts]
@@ -454,11 +582,11 @@ function registerKeyboardShortcuts() {
   if (screenshotShortcut) {
     try {
       globalShortcut.register(screenshotShortcut, () => {
-        startScreenshotCapture()
+        void handleFullScreenshotShortcut()
       })
-      console.log(`Registered screenshot: ${screenshotShortcut}`)
+      console.log(`Registered full-screen screenshot: ${screenshotShortcut}`)
     } catch (error) {
-      console.error(`Failed to register screenshot (${screenshotShortcut}):`, error)
+      console.error(`Failed to register full-screen screenshot (${screenshotShortcut}):`, error)
     }
   }
 }

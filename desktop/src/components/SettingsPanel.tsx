@@ -80,8 +80,8 @@ const shortcutGroups: ShortcutGroup[] = [
     actions: [
       {
         key: 'screenshot',
-        label: 'Capture Selection',
-        description: 'Open the screenshot overlay to capture part of your screen.',
+        label: 'Capture Full Screen',
+        description: 'Copy a full screenshot of every monitor to the clipboard.',
       },
     ],
   },
@@ -326,7 +326,7 @@ export default function SettingsPanel({
           </div>
 
           {!canManageShortcuts ? (
-            <div className="rounded-md border border-white/10 bg-black/40 px-3 py-2 text-xs text-white/60">
+            <div className="rounded-md border border-white/10 bg-black/70 px-3 py-2 text-xs text-white/60">
               Keybind controls are only available in the desktop app.
             </div>
           ) : (
@@ -381,7 +381,7 @@ export default function SettingsPanel({
                             'flex flex-1 items-center gap-3 rounded-md border px-3 py-2 font-mono text-xs uppercase tracking-wide transition-colors',
                             isRecording
                               ? 'border-white bg-black/70 text-white'
-                              : 'border-white/15 bg-black/40 text-white/80',
+                              : 'border-white/15 bg-black/70 text-white/80',
                             isUpdating ? 'opacity-70' : '',
                           ]
                             .filter(Boolean)

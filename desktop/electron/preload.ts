@@ -95,6 +95,20 @@ contextBridge.exposeInMainWorld('screenshot', {
     return () => {
       ipcRenderer.off('screenshot-result', listener)
     }
+  },
+  onFullScreenshotStart: (callback: () => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('screenshot-full-start', listener)
+    return () => {
+      ipcRenderer.off('screenshot-full-start', listener)
+    }
+  },
+  onFullScreenshotComplete: (callback: (result: { success: boolean }) => void) => {
+    const listener = (_event: IpcRendererEvent, data: { success: boolean }) => callback(data)
+    ipcRenderer.on('screenshot-full-complete', listener)
+    return () => {
+      ipcRenderer.off('screenshot-full-complete', listener)
+    }
   }
 })
 

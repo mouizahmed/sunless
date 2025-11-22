@@ -1,4 +1,5 @@
 // TypeScript declarations for window APIs
+import type { LiveInsight, LiveResponseSuggestion } from './types/live-insight'
 
 // Authentication Result - using discriminated union for type safety
 type AuthResult =
@@ -61,6 +62,8 @@ interface ScreenshotControl {
   cancel: () => void
   close: () => void
   onResult: (callback: (result: ScreenshotResult) => void) => () => void
+  onFullScreenshotStart: (callback: () => void) => () => void
+  onFullScreenshotComplete: (callback: (result: { success: boolean }) => void) => () => void
 }
 
 type ShortcutAction =
@@ -94,6 +97,18 @@ interface AttachmentsControl {
   pickFiles: () => Promise<AttachmentResult[]>
 }
 
+interface LiveInsightsControl {
+  onInsight?: (callback: (event: { insight: LiveInsight }) => void) => () => void
+  onProcessing?: (callback: (processing: boolean) => void) => () => void
+  onReset?: (callback: () => void) => () => void
+  onEnabledChange?: (callback: (enabled: boolean) => void) => () => void
+  setEnabled?: (enabled: boolean) => void
+  isEnabled?: () => boolean | Promise<boolean>
+  onResponseSuggestion?: (callback: (event: { suggestion: LiveResponseSuggestion }) => void) => () => void
+  onResponseClear?: (callback: () => void) => () => void
+  clearResponseSuggestion?: () => void
+}
+
 interface ElectronAPI {
   // OAuth Authentication
   authenticateWithGoogle: () => Promise<AuthResult>
@@ -111,13 +126,18 @@ interface ElectronAPI {
   ) => () => void
 }
 
-interface Window {
-  windowControl: WindowControl
-  screenshot: ScreenshotControl
-  electronAPI: ElectronAPI
-  shortcutControl?: ShortcutControl
-  attachments?: AttachmentsControl
-  env: {
-    platform: NodeJS.Platform
+declare global {
+  interface Window {
+    windowControl: WindowControl
+    screenshot: ScreenshotControl
+    electronAPI: ElectronAPI
+    shortcutControl?: ShortcutControl
+    attachments?: AttachmentsControl
+    liveInsights?: LiveInsightsControl
+    env: {
+      platform: NodeJS.Platform
+    }
   }
 }
+
+export {}

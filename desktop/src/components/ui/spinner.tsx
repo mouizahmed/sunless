@@ -1,0 +1,23 @@
+import { Loader2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+type SpinnerProps = {
+  className?: string
+  size?: 'sm' | 'md' | 'lg'
+}
+
+const sizeClasses: Record<NonNullable<SpinnerProps['size']>, string> = {
+  sm: 'h-4 w-4',
+  md: 'h-5 w-5',
+  lg: 'h-6 w-6',
+}
+
+export function Spinner({ className, size = 'md' }: SpinnerProps) {
+  return (
+    <Loader2
+      aria-hidden="true"
+      className={cn('animate-spin text-white/90', sizeClasses[size], className)}
+    />
+  )
+}
+

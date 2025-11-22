@@ -46,7 +46,7 @@ export default function AttachmentsBar({ attachments, onRemoveAttachment }: Atta
               : undefined
         const previewContainerClassName = 'relative h-16 w-16'
         const previewContentClassName = clsx(
-          'h-full w-full rounded-md bg-black/40 text-white/70',
+          'h-full w-full rounded-md bg-black/70 text-white/70',
           attachment.kind === 'file' ? 'flex items-center justify-center' : 'overflow-hidden',
         )
 
