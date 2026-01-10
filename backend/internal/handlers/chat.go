@@ -3,7 +3,6 @@ package handlers
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -11,31 +10,42 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/mouizahmed/justscribe-backend/internal/chunks"
+	"github.com/mouizahmed/justscribe-backend/internal/memory"
 	"github.com/mouizahmed/justscribe-backend/internal/models"
 	"github.com/mouizahmed/justscribe-backend/internal/prompts"
 	"github.com/mouizahmed/justscribe-backend/internal/repository"
+	"github.com/mouizahmed/justscribe-backend/internal/retrieval"
 	"github.com/mouizahmed/justscribe-backend/internal/storage"
 	openai "github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/packages/param"
 	responses "github.com/openai/openai-go/v3/responses"
 	"github.com/openai/openai-go/v3/shared"
+	"github.com/pkoukk/tiktoken-go"
 )
 
 var ErrMissingOpenAIApiKey = errors.New("OPENAI_API_KEY is not configured")
 
 type ChatHandler struct {
 	conversationRepo *repository.ConversationRepository
+	memoryRepo       *repository.MemoryRepository
 	openaiClient     *openai.Client
 	b2Client         *storage.B2Client
 	apiConfigured    bool
+	retrieval        *retrieval.RetrievalService
+	memoryService    *memory.Service
+	chunkService     *chunks.Service
+	historyLimit     int
+	memoryTopK       int
+	chunkTopK        int
 }
 
 type ChatRequest struct {
@@ -59,6 +69,18 @@ type processedAttachment struct {
 	ClientID   string
 	Attachment *models.ConversationAttachment
 	FileID     string
+}
+
+type memoryContextEntry struct {
+	Summary    string
+	Importance int
+	Score      float32
+}
+
+type chunkContextEntry struct {
+	Summary    string
+	Score      float32
+	MessageIDs []string
 }
 
 type conversationSessionResponse struct {
@@ -92,6 +114,51 @@ type conversationMessageResponse struct {
 	Content     string                                  `json:"content"`
 	CreatedAt   time.Time                               `json:"created_at"`
 	Attachments []conversationMessageAttachmentResponse `json:"attachments,omitempty"`
+}
+
+func NewChatHandler(conversationRepo *repository.ConversationRepository, memoryRepo *repository.MemoryRepository, b2Client *storage.B2Client) (*ChatHandler, error) {
+	apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
+	if apiKey == "" {
+		return &ChatHandler{
+			conversationRepo: conversationRepo,
+			memoryRepo:       memoryRepo,
+			openaiClient:     nil,
+			b2Client:         b2Client,
+			apiConfigured:    false,
+			historyLimit:     40,
+			memoryTopK:       6,
+		}, ErrMissingOpenAIApiKey
+	}
+
+	client := openai.NewClient(option.WithAPIKey(apiKey))
+
+	retrievalService, err := retrieval.NewRetrievalService(&client)
+	if err != nil {
+		log.Printf("chat: failed to initialize retrieval service: %v", err)
+	}
+
+	var memoryService *memory.Service
+	var chunkService *chunks.Service
+	if retrievalService != nil {
+		if memoryRepo != nil {
+			memoryService = memory.NewService(conversationRepo, memoryRepo, retrievalService, &client)
+		}
+		chunkService = chunks.NewService(conversationRepo, retrievalService, &client)
+	}
+
+	return &ChatHandler{
+		conversationRepo: conversationRepo,
+		memoryRepo:       memoryRepo,
+		openaiClient:     &client,
+		b2Client:         b2Client,
+		apiConfigured:    true,
+		retrieval:        retrievalService,
+		memoryService:    memoryService,
+		chunkService:     chunkService,
+		historyLimit:     40,
+		memoryTopK:       6,
+		chunkTopK:        4,
+	}, nil
 }
 
 func (h *ChatHandler) ListSessions(c *gin.Context) {
@@ -252,122 +319,6 @@ func (h *ChatHandler) GetSessionHistory(c *gin.Context) {
 	})
 }
 
-func conversationSessionSummaryToResponse(summary repository.ConversationSessionSummary) conversationSessionResponse {
-	resp := conversationSessionResponse{
-		ID:                summary.Session.ID,
-		StartedAt:         summary.Session.CreatedAt,
-		UpdatedAt:         summary.Session.UpdatedAt,
-		ChatModelProvider: summary.Session.ChatModelProvider,
-		ChatModelName:     summary.Session.ChatModelName,
-		LiveModelProvider: summary.Session.LiveModelProvider,
-		LiveModelName:     summary.Session.LiveModelName,
-		MessageCount:      summary.MessageCount,
-	}
-
-	if summary.LastMessageSender != nil {
-		sender := *summary.LastMessageSender
-		resp.LastMessageSender = &sender
-	}
-
-	if summary.LastMessageAt != nil {
-		ts := *summary.LastMessageAt
-		resp.LastMessageAt = &ts
-	}
-
-	if summary.LastMessageContent != nil {
-		if preview := buildMessagePreview(*summary.LastMessageContent); preview != "" {
-			resp.LastMessagePreview = &preview
-		}
-	}
-
-	return resp
-}
-
-func conversationSessionToResponse(session *models.ConversationSession, messages []models.ConversationMessage) conversationSessionResponse {
-	resp := conversationSessionResponse{
-		ID:                session.ID,
-		StartedAt:         session.CreatedAt,
-		UpdatedAt:         session.UpdatedAt,
-		ChatModelProvider: session.ChatModelProvider,
-		ChatModelName:     session.ChatModelName,
-		LiveModelProvider: session.LiveModelProvider,
-		LiveModelName:     session.LiveModelName,
-		MessageCount:      len(messages),
-	}
-
-	for i := len(messages) - 1; i >= 0; i-- {
-		msg := messages[i]
-
-		if resp.LastMessageAt == nil {
-			ts := msg.CreatedAt
-			resp.LastMessageAt = &ts
-			sender := msg.Sender
-			resp.LastMessageSender = &sender
-		}
-
-		if resp.LastMessagePreview == nil {
-			if preview := buildMessagePreview(msg.Content); preview != "" {
-				resp.LastMessagePreview = &preview
-				if resp.LastMessageSender == nil {
-					sender := msg.Sender
-					resp.LastMessageSender = &sender
-				}
-				if resp.LastMessageAt == nil {
-					ts := msg.CreatedAt
-					resp.LastMessageAt = &ts
-				}
-			}
-		}
-
-		if resp.LastMessagePreview != nil && resp.LastMessageAt != nil {
-			break
-		}
-	}
-
-	return resp
-}
-
-func buildMessagePreview(content string) string {
-	trimmed := strings.TrimSpace(content)
-	if trimmed == "" {
-		return ""
-	}
-
-	const maxRunes = 200
-	runes := []rune(trimmed)
-	if len(runes) <= maxRunes {
-		return trimmed
-	}
-
-	truncated := strings.TrimSpace(string(runes[:maxRunes]))
-	if truncated == "" {
-		return string(runes[:maxRunes]) + "…"
-	}
-
-	return truncated + "…"
-}
-
-func NewChatHandler(conversationRepo *repository.ConversationRepository, b2Client *storage.B2Client) (*ChatHandler, error) {
-	apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
-	if apiKey == "" {
-		return &ChatHandler{
-			conversationRepo: conversationRepo,
-			openaiClient:     nil,
-			b2Client:         b2Client,
-			apiConfigured:    false,
-		}, ErrMissingOpenAIApiKey
-	}
-
-	client := openai.NewClient(option.WithAPIKey(apiKey))
-
-	return &ChatHandler{
-		conversationRepo: conversationRepo,
-		openaiClient:     &client,
-		b2Client:         b2Client,
-		apiConfigured:    true,
-	}, nil
-}
-
 func (h *ChatHandler) SendMessage(c *gin.Context) {
 	if !h.apiConfigured {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "chat service not configured"})
@@ -422,7 +373,11 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 
 		session, err = h.conversationRepo.CreateSession(session)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create session"})
+			log.Printf("chat: failed to create session for user %s: %v", userID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "failed to create session",
+				"details": err.Error(),
+			})
 			return
 		}
 	}
@@ -439,11 +394,22 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 		return
 	}
 
+	if err := h.conversationRepo.TouchSessionUpdatedAt(session.ID); err != nil {
+		log.Printf("chat: failed to bump session timestamp %s: %v", session.ID, err)
+	}
+
 	processedAttachments, err := h.processAttachments(c.Request.Context(), session, userID, userMessage.ID, req.Attachments)
 	if err != nil {
 		log.Printf("chat: failed to process attachments for session %s: %v", session.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to store attachments", "details": err.Error()})
 		return
+	}
+
+	if h.memoryService != nil {
+		go h.memoryService.MaybeCreateMemory(context.Background(), session, userMessage)
+	}
+	if h.chunkService != nil {
+		go h.chunkService.MaybeCreateChunk(context.Background(), session)
 	}
 
 	c.Writer.Header().Set("Content-Type", "text/event-stream")
@@ -459,17 +425,64 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 		}
 	}
 
-	messages, err := h.conversationRepo.ListMessagesBySession(session.ID)
+	historyLimit := h.historyLimit
+	if historyLimit <= 0 {
+		historyLimit = 20
+	}
+
+	recentMessages, err := h.conversationRepo.ListRecentMessages(session.ID, historyLimit)
 	if err != nil {
-		log.Printf("chat: failed to retrieve conversation for session %s: %v", session.ID, err)
+		log.Printf("chat: failed to retrieve recent messages for session %s: %v", session.ID, err)
 		writeSSEError(c.Writer, flusher, session.ID, "failed to retrieve conversation", err)
 		return
 	}
 
-	messageIDs := make([]string, 0, len(messages))
-	for _, msg := range messages {
+	foundCurrent := false
+	for _, msg := range recentMessages {
+		if msg.ID == userMessage.ID {
+			foundCurrent = true
+			break
+		}
+	}
+	if !foundCurrent {
+		recentMessages = append(recentMessages, *userMessage)
+	}
+
+	historyMessages := make([]models.ConversationMessage, 0, len(recentMessages))
+	for _, msg := range recentMessages {
+		if msg.ID == userMessage.ID {
+			continue
+		}
+		historyMessages = append(historyMessages, msg)
+	}
+
+	isLiveTurn := channel == "live"
+	var liveSummary *models.ConversationSummary
+	if isLiveTurn {
+		summaryWindow := make([]models.ConversationMessage, 0, len(historyMessages)+1)
+		summaryWindow = append(summaryWindow, historyMessages...)
+		summaryWindow = append(summaryWindow, *userMessage)
+		liveSummary, err = h.maybeUpdateLiveSummary(c.Request.Context(), session.ID, summaryWindow)
+		if err != nil {
+			log.Printf("chat: failed to update live summary for session %s: %v", session.ID, err)
+		}
+	}
+
+	memoryEntries, err := h.loadMemoryContext(c.Request.Context(), userID, req.Message)
+	if err != nil {
+		log.Printf("chat: failed to retrieve memories for session %s: %v", session.ID, err)
+	}
+
+	chunkEntries, err := h.loadChunkContext(c.Request.Context(), userID, session.ID, req.Message)
+	if err != nil {
+		log.Printf("chat: failed to retrieve chunks for session %s: %v", session.ID, err)
+	}
+
+	messageIDs := make([]string, 0, len(historyMessages)+1)
+	for _, msg := range historyMessages {
 		messageIDs = append(messageIDs, msg.ID)
 	}
+	messageIDs = append(messageIDs, userMessage.ID)
 
 	attachmentsByMessage, err := h.conversationRepo.ListAttachmentsByMessageIDs(messageIDs)
 	if err != nil {
@@ -485,78 +498,65 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 		}
 	}
 
-	inputItems := make([]responses.ResponseInputItemUnionParam, 0, len(messages)+1)
-	inputItems = append(inputItems, responses.ResponseInputItemParamOfMessage(
-		prompts.SunlessSystemPrompt,
-		responses.EasyInputMessageRoleSystem,
-	))
-	// Append the canonical Sunless system prompt so every session begins with consistent instructions.
+	inputItems := make([]responses.ResponseInputItemUnionParam, 0)
+	inputItems = append(inputItems, responses.ResponseInputItemParamOfMessage(prompts.SunlessSystemPrompt, responses.EasyInputMessageRoleSystem))
 
-	for _, msg := range messages {
+	if isLiveTurn && liveSummary != nil && strings.TrimSpace(liveSummary.Content) != "" {
+		inputItems = append(inputItems, responses.ResponseInputItemParamOfMessage(
+			fmt.Sprintf("Current live summary:\n%s", strings.TrimSpace(liveSummary.Content)),
+			responses.EasyInputMessageRoleSystem,
+		))
+	}
+
+	if len(memoryEntries) > 0 {
+		var builder strings.Builder
+		builder.WriteString("Relevant long term context:\n")
+		for _, entry := range memoryEntries {
+			builder.WriteString(fmt.Sprintf("- %s\n", entry.Summary))
+		}
+		inputItems = append(inputItems, responses.ResponseInputItemParamOfMessage(builder.String(), responses.EasyInputMessageRoleSystem))
+	}
+
+	if len(chunkEntries) > 0 {
+		var builder strings.Builder
+		builder.WriteString("Retrieved conversation chunks:\n")
+		for _, entry := range chunkEntries {
+			builder.WriteString(fmt.Sprintf("- %s\n", entry.Summary))
+		}
+		inputItems = append(inputItems, responses.ResponseInputItemParamOfMessage(builder.String(), responses.EasyInputMessageRoleSystem))
+	}
+
+	for _, msg := range historyMessages {
 		role := responses.EasyInputMessageRoleUser
 		if msg.Sender == "assistant" {
 			role = responses.EasyInputMessageRoleAssistant
 		}
 
-		trimmed := strings.TrimSpace(msg.Content)
-		attachmentRecords := attachmentsByMessage[msg.ID]
-
-		contentParts := make([]responses.ResponseInputContentUnionParam, 0, 1+len(attachmentRecords))
-		if trimmed != "" {
-			contentParts = append(contentParts, responses.ResponseInputContentParamOfInputText(trimmed))
-		}
-
-		for _, att := range attachmentRecords {
-			if att.DeletedAt != nil {
-				continue
-			}
-
-			fileID := extractAttachmentFileID(att, processedByAttachmentID)
-
-			if fileID != "" {
-				if strings.HasPrefix(att.MimeType, "image/") {
-					imageParam := responses.ResponseInputImageParam{
-						Detail: responses.ResponseInputImageDetailAuto,
-					}
-					imageParam.FileID = param.NewOpt(fileID)
-					contentParts = append(contentParts, responses.ResponseInputContentUnionParam{OfInputImage: &imageParam})
-				} else {
-					fileParam := responses.ResponseInputFileParam{}
-					fileParam.FileID = param.NewOpt(fileID)
-					contentParts = append(contentParts, responses.ResponseInputContentUnionParam{OfInputFile: &fileParam})
-				}
-			} else if att.PublicURL != nil && strings.HasPrefix(att.MimeType, "image/") {
-				imageParam := responses.ResponseInputImageParam{
-					Detail: responses.ResponseInputImageDetailAuto,
-				}
-				imageParam.ImageURL = param.NewOpt(*att.PublicURL)
-				contentParts = append(contentParts, responses.ResponseInputContentUnionParam{OfInputImage: &imageParam})
-			}
-
-			description := att.FileName
-			if description == "" {
-				description = "Attachment"
-			}
-			if att.PublicURL != nil && fileID == "" {
-				description = fmt.Sprintf("%s (%s)\n%s", description, att.MimeType, *att.PublicURL)
-			} else {
-				description = fmt.Sprintf("%s (%s)", description, att.MimeType)
-			}
-			contentParts = append(contentParts, responses.ResponseInputContentParamOfInputText(description))
-		}
-
-		if len(contentParts) == 0 {
+		plain, parts, attachmentCount := h.buildMessageContent(msg, attachmentsByMessage[msg.ID], false, processedByAttachmentID)
+		if len(parts) == 0 {
 			continue
 		}
 
 		var item responses.ResponseInputItemUnionParam
-		if len(contentParts) == 1 && len(attachmentRecords) == 0 && trimmed != "" {
-			item = responses.ResponseInputItemParamOfMessage(trimmed, role)
+		if attachmentCount == 0 && plain != "" && len(parts) == 1 {
+			item = responses.ResponseInputItemParamOfMessage(plain, role)
 		} else {
-			item = responses.ResponseInputItemParamOfMessage(responses.ResponseInputMessageContentListParam(contentParts), role)
+			item = responses.ResponseInputItemParamOfMessage(responses.ResponseInputMessageContentListParam(parts), role)
 		}
 
 		inputItems = append(inputItems, item)
+	}
+
+	currentPlain, currentParts, currentAttachmentCount := h.buildMessageContent(*userMessage, attachmentsByMessage[userMessage.ID], true, processedByAttachmentID)
+	if len(currentParts) > 0 {
+		role := responses.EasyInputMessageRoleUser
+		var userItem responses.ResponseInputItemUnionParam
+		if currentAttachmentCount == 0 && currentPlain != "" && len(currentParts) == 1 {
+			userItem = responses.ResponseInputItemParamOfMessage(currentPlain, role)
+		} else {
+			userItem = responses.ResponseInputItemParamOfMessage(responses.ResponseInputMessageContentListParam(currentParts), role)
+		}
+		inputItems = append(inputItems, userItem)
 	}
 
 	request := responses.ResponseNewParams{
@@ -654,9 +654,111 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 		return
 	}
 
+	// NOTE: We intentionally do NOT upsert assistant messages to Pinecone.
+	// Reasons:
+	// 1. Assistant responses are already passed in recent messages (last 20)
+	// 2. Storing them can cause circular retrieval - the assistant's own responses
+	//    get retrieved as "context", which can reinforce errors
+	// 3. It wastes retrieval slots that could be used for user-provided information
+
 	if err := writeSSEDone(c.Writer, flusher, session.ID, assistantMessage); err != nil {
 		log.Printf("chat: failed to stream completion event for session %s: %v", session.ID, err)
 	}
+}
+
+func conversationSessionSummaryToResponse(summary repository.ConversationSessionSummary) conversationSessionResponse {
+	resp := conversationSessionResponse{
+		ID:                summary.Session.ID,
+		StartedAt:         summary.Session.CreatedAt,
+		UpdatedAt:         summary.Session.UpdatedAt,
+		ChatModelProvider: summary.Session.ChatModelProvider,
+		ChatModelName:     summary.Session.ChatModelName,
+		LiveModelProvider: summary.Session.LiveModelProvider,
+		LiveModelName:     summary.Session.LiveModelName,
+		MessageCount:      summary.MessageCount,
+	}
+
+	if summary.LastMessageSender != nil {
+		sender := *summary.LastMessageSender
+		resp.LastMessageSender = &sender
+	}
+
+	if summary.LastMessageAt != nil {
+		ts := *summary.LastMessageAt
+		resp.LastMessageAt = &ts
+	}
+
+	if summary.LastMessageContent != nil {
+		if preview := buildMessagePreview(*summary.LastMessageContent); preview != "" {
+			resp.LastMessagePreview = &preview
+		}
+	}
+
+	return resp
+}
+
+func conversationSessionToResponse(session *models.ConversationSession, messages []models.ConversationMessage) conversationSessionResponse {
+	resp := conversationSessionResponse{
+		ID:                session.ID,
+		StartedAt:         session.CreatedAt,
+		UpdatedAt:         session.UpdatedAt,
+		ChatModelProvider: session.ChatModelProvider,
+		ChatModelName:     session.ChatModelName,
+		LiveModelProvider: session.LiveModelProvider,
+		LiveModelName:     session.LiveModelName,
+		MessageCount:      len(messages),
+	}
+
+	for i := len(messages) - 1; i >= 0; i-- {
+		msg := messages[i]
+
+		if resp.LastMessageAt == nil {
+			ts := msg.CreatedAt
+			resp.LastMessageAt = &ts
+			sender := msg.Sender
+			resp.LastMessageSender = &sender
+		}
+
+		if resp.LastMessagePreview == nil {
+			if preview := buildMessagePreview(msg.Content); preview != "" {
+				resp.LastMessagePreview = &preview
+				if resp.LastMessageSender == nil {
+					sender := msg.Sender
+					resp.LastMessageSender = &sender
+				}
+				if resp.LastMessageAt == nil {
+					ts := msg.CreatedAt
+					resp.LastMessageAt = &ts
+				}
+			}
+		}
+
+		if resp.LastMessagePreview != nil && resp.LastMessageAt != nil {
+			break
+		}
+	}
+
+	return resp
+}
+
+func buildMessagePreview(content string) string {
+	trimmed := strings.TrimSpace(content)
+	if trimmed == "" {
+		return ""
+	}
+
+	const maxRunes = 200
+	runes := []rune(trimmed)
+	if len(runes) <= maxRunes {
+		return trimmed
+	}
+
+	truncated := strings.TrimSpace(string(runes[:maxRunes]))
+	if truncated == "" {
+		return string(runes[:maxRunes]) + "…"
+	}
+
+	return truncated + "…"
 }
 
 func writeSSEPayload(w http.ResponseWriter, flusher http.Flusher, payload interface{}) error {
@@ -752,6 +854,7 @@ func writeSSESearchEnd(w http.ResponseWriter, flusher http.Flusher, sessionID st
 	}
 	return writeSSEPayload(w, flusher, payload)
 }
+
 func writeSSEMessageAck(w http.ResponseWriter, flusher http.Flusher, sessionID, clientMessageID string, message *models.ConversationMessage, attachments []processedAttachment) error {
 	attachmentPayloads := make([]map[string]interface{}, 0, len(attachments))
 	for _, att := range attachments {
@@ -765,123 +868,253 @@ func writeSSEMessageAck(w http.ResponseWriter, flusher http.Flusher, sessionID, 
 		}
 
 		payloadEntry := map[string]interface{}{
-			"client_id":  att.ClientID,
-			"id":         att.Attachment.ID,
-			"file_name":  att.Attachment.FileName,
-			"mime_type":  att.Attachment.MimeType,
-			"size_bytes": att.Attachment.SizeBytes,
-			"public_url": publicURL,
-			"source":     att.Attachment.Source,
+			"client_id": att.ClientID,
+			"id":        att.Attachment.ID,
+			"url":       publicURL,
 		}
-		if att.FileID != "" {
-			payloadEntry["file_id"] = att.FileID
-		}
-
 		attachmentPayloads = append(attachmentPayloads, payloadEntry)
 	}
 
 	payload := map[string]interface{}{
-		"type":              "message-ack",
+		"type":              "ack",
 		"session_id":        sessionID,
 		"client_message_id": clientMessageID,
-		"message": map[string]interface{}{
-			"id":          message.ID,
-			"remote_id":   message.ID,
-			"channel":     message.Channel,
-			"created_at":  message.CreatedAt.UTC().Format(time.RFC3339Nano),
-			"attachments": attachmentPayloads,
-		},
+		"message_id":        message.ID,
+		"attachments":       attachmentPayloads,
 	}
 
 	return writeSSEPayload(w, flusher, payload)
 }
 
-func (h *ChatHandler) processAttachments(ctx context.Context, session *models.ConversationSession, userID, messageID string, payloads []ChatAttachmentPayload) ([]processedAttachment, error) {
-	if len(payloads) == 0 {
+func (h *ChatHandler) buildMessageContent(msg models.ConversationMessage, attachments []models.ConversationAttachment, includeFiles bool, processed map[string]processedAttachment) (string, []responses.ResponseInputContentUnionParam, int) {
+	trimmed := strings.TrimSpace(msg.Content)
+	contentParts := make([]responses.ResponseInputContentUnionParam, 0)
+	if trimmed != "" {
+		contentParts = append(contentParts, responses.ResponseInputContentParamOfInputText(trimmed))
+	}
+
+	attachmentCount := 0
+	for _, att := range attachments {
+		if att.DeletedAt != nil {
+			continue
+		}
+		attachmentCount++
+
+		if includeFiles {
+			fileID := extractAttachmentFileID(att, processed)
+			if fileID != "" {
+				if strings.HasPrefix(att.MimeType, "image/") {
+					imageParam := responses.ResponseInputImageParam{
+						Detail: responses.ResponseInputImageDetailAuto,
+					}
+					imageParam.FileID = param.NewOpt(fileID)
+					contentParts = append(contentParts, responses.ResponseInputContentUnionParam{OfInputImage: &imageParam})
+				} else {
+					fileParam := responses.ResponseInputFileParam{}
+					fileParam.FileID = param.NewOpt(fileID)
+					contentParts = append(contentParts, responses.ResponseInputContentUnionParam{OfInputFile: &fileParam})
+				}
+			} else if att.PublicURL != nil && strings.HasPrefix(att.MimeType, "image/") {
+				imageParam := responses.ResponseInputImageParam{
+					Detail: responses.ResponseInputImageDetailAuto,
+				}
+				imageParam.ImageURL = param.NewOpt(*att.PublicURL)
+				contentParts = append(contentParts, responses.ResponseInputContentUnionParam{OfInputImage: &imageParam})
+			}
+
+			description := att.FileName
+			if description == "" {
+				description = "Attachment"
+			}
+			contentParts = append(contentParts, responses.ResponseInputContentParamOfInputText(fmt.Sprintf("%s (%s)", description, att.MimeType)))
+		} else {
+			desc := fmt.Sprintf("[Attachment: %s (%s)]", att.FileName, att.MimeType)
+			contentParts = append(contentParts, responses.ResponseInputContentParamOfInputText(desc))
+		}
+	}
+
+	return trimmed, contentParts, attachmentCount
+}
+
+func (h *ChatHandler) loadMemoryContext(ctx context.Context, userID string, query string) ([]memoryContextEntry, error) {
+	if h.retrieval == nil || h.memoryRepo == nil {
+		log.Printf("chat: memory retrieval skipped user=%s reason=retrieval-disabled", userID)
+		return nil, nil
+	}
+	query = strings.TrimSpace(query)
+	if query == "" {
+		log.Printf("chat: memory retrieval skipped user=%s reason=empty-query", userID)
 		return nil, nil
 	}
 
-	if h.b2Client == nil {
-		return nil, fmt.Errorf("attachments not supported")
+	matches, err := h.retrieval.QueryMemories(ctx, userID, query, h.memoryTopK)
+	if err != nil {
+		return nil, err
+	}
+	if len(matches) == 0 {
+		log.Printf("chat: memory retrieval user=%s query=%q hits=0 (pinecone)", userID, query)
+		return nil, nil
 	}
 
-	processed := make([]processedAttachment, 0, len(payloads))
+	ids := make([]string, 0, len(matches))
+	for _, match := range matches {
+		ids = append(ids, match.MemoryID)
+	}
 
-	for _, payload := range payloads {
-		if payload.Data == "" {
-			return nil, fmt.Errorf("attachment %s missing data", payload.ID)
+	memoryMap, err := h.memoryRepo.GetMemoriesByIDs(ids)
+	if err != nil {
+		return nil, err
+	}
+
+	entries := make([]memoryContextEntry, 0, len(matches))
+	for _, match := range matches {
+		mem, ok := memoryMap[match.MemoryID]
+		if !ok {
+			log.Printf("chat: memory retrieval missing row user=%s memory_id=%s", userID, match.MemoryID)
+			continue
 		}
+		summary := strings.TrimSpace(mem.Summary)
+		if summary == "" {
+			continue
+		}
+		entries = append(entries, memoryContextEntry{
+			Summary:    summary,
+			Importance: mem.Importance,
+			Score:      match.Score,
+		})
+	}
 
+	sort.SliceStable(entries, func(i, j int) bool {
+		if entries[i].Importance == entries[j].Importance {
+			return entries[i].Score > entries[j].Score
+		}
+		return entries[i].Importance > entries[j].Importance
+	})
+
+	if len(entries) > h.memoryTopK && h.memoryTopK > 0 {
+		entries = entries[:h.memoryTopK]
+	}
+
+	if len(entries) > 0 {
+		logDetails := make([]string, 0, len(entries))
+		for idx, entry := range entries {
+			logDetails = append(logDetails, fmt.Sprintf("#%d importance=%d score=%.3f summary=%q", idx+1, entry.Importance, entry.Score, entry.Summary))
+		}
+		log.Printf("chat: memory retrieval user=%s query=%q hits=%d %s", userID, query, len(entries), strings.Join(logDetails, "; "))
+	} else {
+		log.Printf("chat: memory retrieval user=%s query=%q hits=0", userID, query)
+	}
+
+	return entries, nil
+}
+
+func (h *ChatHandler) loadChunkContext(ctx context.Context, userID, sessionID, query string) ([]chunkContextEntry, error) {
+	if h.retrieval == nil {
+		log.Printf("chat: chunk retrieval skipped user=%s reason=retrieval-disabled", userID)
+		return nil, nil
+	}
+	query = strings.TrimSpace(query)
+	if query == "" {
+		log.Printf("chat: chunk retrieval skipped user=%s reason=empty-query", userID)
+		return nil, nil
+	}
+
+	matches, err := h.retrieval.QueryChunks(ctx, userID, sessionID, query, h.chunkTopK)
+	if err != nil {
+		return nil, err
+	}
+	if len(matches) == 0 {
+		log.Printf("chat: chunk retrieval user=%s session=%s query=%q hits=0 (pinecone)", userID, sessionID, query)
+		return nil, nil
+	}
+
+	entries := make([]chunkContextEntry, 0, len(matches))
+	for _, match := range matches {
+		if strings.TrimSpace(match.Summary) == "" {
+			continue
+		}
+		entries = append(entries, chunkContextEntry{
+			Summary:    strings.TrimSpace(match.Summary),
+			Score:      match.Score,
+			MessageIDs: match.MessageIDs,
+		})
+	}
+
+	if len(entries) > 0 {
+		var details []string
+		for idx, entry := range entries {
+			details = append(details, fmt.Sprintf("#%d score=%.3f summary=%q", idx+1, entry.Score, entry.Summary))
+		}
+		log.Printf("chat: chunk retrieval user=%s session=%s query=%q hits=%d %s", userID, sessionID, query, len(entries), strings.Join(details, "; "))
+	}
+
+	return entries, nil
+}
+
+func (h *ChatHandler) processAttachments(ctx context.Context, session *models.ConversationSession, userID string, messageID string, attachments []ChatAttachmentPayload) ([]processedAttachment, error) {
+	var processed []processedAttachment
+	if len(attachments) == 0 {
+		return processed, nil
+	}
+
+	for _, payload := range attachments {
 		data, err := decodeBase64Data(payload.Data)
 		if err != nil {
-			return nil, fmt.Errorf("failed to decode attachment %s: %w", payload.ID, err)
+			log.Printf("failed to decode attachment %s: %v", payload.FileName, err)
+			continue
 		}
 
-		sha := sha256.Sum256(data)
-		hashHex := fmt.Sprintf("%x", sha[:])
-
-		originalName := strings.TrimSpace(payload.FileName)
-		if originalName == "" {
-			originalName = fmt.Sprintf("attachment-%s.bin", uuid.NewString())
+		filename := sanitizeFileName(payload.FileName)
+		mimeType := payload.MimeType
+		if mimeType == "" {
+			mimeType = "application/octet-stream"
 		}
-		baseName := filepath.Base(originalName)
-		storedFileName := fmt.Sprintf("chat/%s/%s_%s", session.ID, uuid.NewString(), sanitizeFileName(baseName))
 
-		uploadURL, err := h.b2Client.GetUploadURL()
+		// Upload to B2
+		uploadURLResp, err := h.b2Client.GetUploadURL()
 		if err != nil {
-			return nil, fmt.Errorf("failed to get B2 upload url: %w", err)
+			return nil, fmt.Errorf("failed to get B2 upload URL: %w", err)
 		}
 
-		contentType := payload.MimeType
-		if contentType == "" {
-			contentType = "application/octet-stream"
-		}
-
-		uploadResp, err := h.b2Client.UploadFile(uploadURL.UploadURL, uploadURL.AuthorizationToken, storedFileName, contentType, data)
+		uploadResp, err := h.b2Client.UploadFile(uploadURLResp.UploadURL, uploadURLResp.AuthorizationToken, filename, mimeType, data)
 		if err != nil {
-			return nil, fmt.Errorf("failed to upload attachment %s: %w", payload.ID, err)
+			return nil, fmt.Errorf("failed to upload to B2: %w", err)
 		}
 
-		fileID, err := h.uploadAttachmentToOpenAI(ctx, baseName, contentType, data)
+		// Upload to OpenAI (optional, only if image/file type is supported)
+		fileID, err := h.uploadAttachmentToOpenAI(ctx, filename, mimeType, data)
 		if err != nil {
-			return nil, fmt.Errorf("failed to upload attachment %s to OpenAI: %w", payload.ID, err)
+			log.Printf("failed to upload to OpenAI: %v", err)
+			// Continue without OpenAI file ID
 		}
+
+		// Metadata
+		metadata := map[string]interface{}{
+			"b2_file_id":     uploadResp.FileID,
+			"b2_bucket_id":   uploadResp.BucketID,
+			"openai_file_id": fileID,
+		}
+		metadataRaw, _ := json.Marshal(metadata)
+		metadataRawMessage := json.RawMessage(metadataRaw)
 
 		publicURL := h.b2Client.GetFileURL(uploadResp.FileName)
-		sizeBytes := payload.SizeBytes
-		if sizeBytes <= 0 {
-			sizeBytes = int64(len(data))
-		}
-
-		shaCopy := hashHex
 		source := payload.Source
-		var metadataRaw *json.RawMessage
-		if fileID != "" {
-			meta := map[string]string{
-				"openai_file_id": fileID,
-			}
-			if metaBytes, err := json.Marshal(meta); err == nil {
-				metadataRaw = (*json.RawMessage)(&metaBytes)
-			} else {
-				return nil, fmt.Errorf("failed to encode attachment metadata %s: %w", payload.ID, err)
-			}
-		}
 
 		attachment := &models.ConversationAttachment{
 			SessionID:  session.ID,
 			MessageID:  &messageID,
 			UploadedBy: userID,
-			FileName:   baseName,
-			MimeType:   contentType,
-			SizeBytes:  sizeBytes,
-			SHA256Hash: &shaCopy,
+			FileName:   uploadResp.FileName,
+			MimeType:   mimeType,
+			SizeBytes:  uploadResp.FileSize,
+			SHA256Hash: &uploadResp.ContentSHA1,
 			B2BucketID: uploadResp.BucketID,
 			B2FileID:   uploadResp.FileID,
 			B2FileName: uploadResp.FileName,
 			PublicURL:  &publicURL,
 			Source:     &source,
 			Status:     "stored",
-			Metadata:   metadataRaw,
+			Metadata:   &metadataRawMessage,
 		}
 
 		if _, err := h.conversationRepo.CreateAttachment(attachment); err != nil {
@@ -969,4 +1202,103 @@ func extractAttachmentFileID(att models.ConversationAttachment, processed map[st
 	}
 
 	return ""
+}
+
+func countTokens(text string) int {
+	tkm, err := tiktoken.EncodingForModel("gpt-4")
+	if err != nil {
+		return len(strings.Fields(text))
+	}
+	token := tkm.Encode(text, nil, nil)
+	return len(token)
+}
+
+func (h *ChatHandler) maybeUpdateLiveSummary(ctx context.Context, sessionID string, recentMessages []models.ConversationMessage) (*models.ConversationSummary, error) {
+	summary, err := h.conversationRepo.GetSummary(sessionID, "live")
+	if err != nil {
+		return nil, err
+	}
+
+	var unsummarizedMessages []models.ConversationMessage
+	lastMessageID := ""
+	if summary != nil {
+		lastMessageID = summary.LastMessageID
+		found := false
+		for _, msg := range recentMessages {
+			if found {
+				unsummarizedMessages = append(unsummarizedMessages, msg)
+			} else if msg.ID == lastMessageID {
+				found = true
+			}
+		}
+		if !found && len(recentMessages) > 0 {
+			unsummarizedMessages = recentMessages
+		}
+	} else {
+		unsummarizedMessages = recentMessages
+	}
+
+	if len(unsummarizedMessages) == 0 {
+		return summary, nil
+	}
+
+	totalTokens := 0
+	for _, msg := range unsummarizedMessages {
+		if msg.TokenCount != nil {
+			totalTokens += *msg.TokenCount
+		} else {
+			totalTokens += countTokens(msg.Content)
+		}
+	}
+
+	threshold := 1500
+	if totalTokens < threshold {
+		return summary, nil
+	}
+
+	log.Printf("Summarizing session %s with %d tokens", sessionID, totalTokens)
+
+	existingContent := "None yet"
+	if summary != nil {
+		existingContent = summary.Content
+	}
+
+	prompt := fmt.Sprintf("SYSTEM:\nYou maintain a running summary of a conversation between user and assistant.\n\nEXISTING SUMMARY:\n%s\n\nNEW MESSAGES:\n", existingContent)
+
+	for _, msg := range unsummarizedMessages {
+		role := "USER"
+		if msg.Sender == "assistant" {
+			role = "ASSISTANT"
+		}
+		prompt += fmt.Sprintf("[%s]: %s\n", role, msg.Content)
+	}
+
+	prompt += "\nTASK:\nUpdate the summary so that it still fits within about 300 to 500 words.\nPreserve key facts, user goals, decisions, constraints, and important references to files or screenshots.\nDo not write a transcript.\nReturn only the updated summary text."
+
+	completion, err := h.openaiClient.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.UserMessage(prompt),
+		},
+		Model: openai.ChatModelGPT4oMini,
+	})
+	if err != nil {
+		log.Printf("failed to summarize: %v", err)
+		return summary, nil
+	}
+
+	newContent := completion.Choices[0].Message.Content
+
+	newSummary := &models.ConversationSummary{
+		SessionID:     sessionID,
+		Type:          "live",
+		Content:       newContent,
+		LastMessageID: unsummarizedMessages[len(unsummarizedMessages)-1].ID,
+	}
+
+	if err := h.conversationRepo.UpsertSummary(newSummary); err != nil {
+		log.Printf("failed to upsert summary: %v", err)
+		return summary, nil
+	}
+
+	return newSummary, nil
 }

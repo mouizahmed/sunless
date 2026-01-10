@@ -8,8 +8,6 @@ const nextConfig: NextConfig = {
       "lh4.googleusercontent.com",
       "lh5.googleusercontent.com",
       "lh6.googleusercontent.com",
-      // Microsoft profile images
-      "graph.microsoft.com",
       // Local development
       "localhost",
     ],
@@ -18,12 +16,6 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "*.googleusercontent.com",
-        port: "",
-        pathname: "**",
-      },
-      {
-        protocol: "https",
-        hostname: "graph.microsoft.com",
         port: "",
         pathname: "**",
       },

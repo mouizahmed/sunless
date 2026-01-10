@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -39,7 +40,10 @@ func (r *ConversationRepository) CreateSession(session *models.ConversationSessi
 
 	query := `
 		INSERT INTO conversation_sessions (
-			id, user_id, chat_model_provider, chat_model_name, live_model_provider, live_model_name, created_at, updated_at
+			id, user_id,
+			chat_model_provider, chat_model_name,
+			live_model_provider, live_model_name,
+			created_at, updated_at
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 
@@ -62,7 +66,10 @@ func (r *ConversationRepository) CreateSession(session *models.ConversationSessi
 
 func (r *ConversationRepository) GetSessionByID(id string) (*models.ConversationSession, error) {
 	query := `
-		SELECT id, user_id, chat_model_provider, chat_model_name, live_model_provider, live_model_name, created_at, updated_at, deleted_at
+		SELECT id, user_id,
+		       chat_model_provider, chat_model_name,
+		       live_model_provider, live_model_name,
+		       created_at, updated_at, deleted_at
 		FROM conversation_sessions
 		WHERE id = $1 AND deleted_at IS NULL
 	`
@@ -87,6 +94,18 @@ func (r *ConversationRepository) GetSessionByID(id string) (*models.Conversation
 	}
 
 	return session, nil
+}
+
+func (r *ConversationRepository) TouchSessionUpdatedAt(sessionID string) error {
+	query := `
+		UPDATE conversation_sessions
+		SET updated_at = NOW()
+		WHERE id = $1
+	`
+	if _, err := r.db.Exec(query, sessionID); err != nil {
+		return fmt.Errorf("failed to update session timestamp: %w", err)
+	}
+	return nil
 }
 
 func (r *ConversationRepository) CreateMessage(message *models.ConversationMessage) (*models.ConversationMessage, error) {
@@ -429,6 +448,182 @@ func (r *ConversationRepository) ListMessagesBySession(sessionID string) ([]mode
 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("failed to iterate conversation messages: %w", err)
+	}
+
+	return messages, nil
+}
+
+func (r *ConversationRepository) ListMessagesAfter(sessionID string, afterMessageID *string, limit int) ([]models.ConversationMessage, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+
+	var rows *sql.Rows
+	var err error
+
+	if afterMessageID == nil || strings.TrimSpace(*afterMessageID) == "" {
+		query := `
+			SELECT id, session_id, channel, sender, content, token_count, metadata, created_at, updated_at, deleted_at
+			FROM conversation_messages
+			WHERE session_id = $1 AND deleted_at IS NULL
+			ORDER BY created_at ASC
+			LIMIT $2
+		`
+		rows, err = r.db.Query(query, sessionID, limit)
+	} else {
+		query := `
+			WITH anchor AS (
+				SELECT created_at FROM conversation_messages WHERE id = $2
+			)
+			SELECT m.id, m.session_id, m.channel, m.sender, m.content,
+			       m.token_count, m.metadata, m.created_at, m.updated_at, m.deleted_at
+			FROM conversation_messages m, anchor
+			WHERE m.session_id = $1
+			  AND m.deleted_at IS NULL
+			  AND m.created_at > anchor.created_at
+			ORDER BY m.created_at ASC
+			LIMIT $3
+		`
+		rows, err = r.db.Query(query, sessionID, *afterMessageID, limit)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to list messages after anchor: %w", err)
+	}
+	defer rows.Close()
+
+	var messages []models.ConversationMessage
+	for rows.Next() {
+		var msg models.ConversationMessage
+		if err := rows.Scan(
+			&msg.ID,
+			&msg.SessionID,
+			&msg.Channel,
+			&msg.Sender,
+			&msg.Content,
+			&msg.TokenCount,
+			&msg.Metadata,
+			&msg.CreatedAt,
+			&msg.UpdatedAt,
+			&msg.DeletedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan conversation message: %w", err)
+		}
+		messages = append(messages, msg)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate conversation messages: %w", err)
+	}
+
+	return messages, nil
+}
+
+func (r *ConversationRepository) GetSummary(sessionID, summaryType string) (*models.ConversationSummary, error) {
+	query := `
+		SELECT id, session_id, type, content, last_message_id, created_at, updated_at
+		FROM conversation_summaries
+		WHERE session_id = $1 AND type = $2 AND deleted_at IS NULL
+		ORDER BY updated_at DESC
+		LIMIT 1
+	`
+	var summary models.ConversationSummary
+	err := r.db.QueryRow(query, sessionID, summaryType).Scan(
+		&summary.ID,
+		&summary.SessionID,
+		&summary.Type,
+		&summary.Content,
+		&summary.LastMessageID,
+		&summary.CreatedAt,
+		&summary.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest chat summary: %w", err)
+	}
+	return &summary, nil
+}
+
+func (r *ConversationRepository) UpsertSummary(summary *models.ConversationSummary) error {
+	if summary.ID == "" {
+		summary.ID = uuid.New().String()
+	}
+	now := time.Now()
+	if summary.CreatedAt.IsZero() {
+		summary.CreatedAt = now
+	}
+	summary.UpdatedAt = now
+
+	query := `
+		INSERT INTO conversation_summaries (
+			id, session_id, type, content, last_message_id, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (session_id, type) DO UPDATE SET
+			content = EXCLUDED.content,
+			last_message_id = EXCLUDED.last_message_id,
+			updated_at = EXCLUDED.updated_at
+	`
+	_, err := r.db.Exec(query,
+		summary.ID,
+		summary.SessionID,
+		summary.Type,
+		summary.Content,
+		summary.LastMessageID,
+		summary.CreatedAt,
+		summary.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to upsert chat summary: %w", err)
+	}
+	return nil
+}
+
+func (r *ConversationRepository) ListRecentMessages(sessionID string, limit int) ([]models.ConversationMessage, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	query := `
+		SELECT id, session_id, channel, sender, content, token_count, metadata, created_at, updated_at, deleted_at
+		FROM conversation_messages
+		WHERE session_id = $1 AND deleted_at IS NULL
+		ORDER BY created_at DESC
+		LIMIT $2
+	`
+	rows, err := r.db.Query(query, sessionID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list recent messages: %w", err)
+	}
+	defer rows.Close()
+
+	var messages []models.ConversationMessage
+	for rows.Next() {
+		var msg models.ConversationMessage
+		err := rows.Scan(
+			&msg.ID,
+			&msg.SessionID,
+			&msg.Channel,
+			&msg.Sender,
+			&msg.Content,
+			&msg.TokenCount,
+			&msg.Metadata,
+			&msg.CreatedAt,
+			&msg.UpdatedAt,
+			&msg.DeletedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan message: %w", err)
+		}
+		messages = append(messages, msg)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate messages: %w", err)
+	}
+
+	// Reverse to chronological order
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
 	}
 
 	return messages, nil

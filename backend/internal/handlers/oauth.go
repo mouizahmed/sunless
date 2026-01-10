@@ -40,8 +40,8 @@ func NewOAuthHandler(userRepo *repository.UserRepository, oauthTokenRepo reposit
 		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 		Endpoint:     google.Endpoint,
-		Scopes:       []string{"openid", "email", "profile", "https://www.googleapis.com/auth/calendar.readonly"},
-		RedirectURL:  os.Getenv("GOOGLE_REDIRECT_URL"), // e.g., http://localhost:8080/auth/callback/google
+		Scopes:       []string{"openid", "email", "profile"},
+		RedirectURL:  os.Getenv("GOOGLE_REDIRECT_URL"), // e.g., http://localhost:8080/auth/callback
 	}
 
 	return &OAuthHandler{
@@ -87,25 +87,18 @@ func (h *OAuthHandler) StartOAuth(c *gin.Context) {
 		return
 	}
 
-	provider := c.Query("provider")
 	state := c.Query("state")
 	platform := c.Query("platform")
 
 	// Validate parameters
-	if provider == "" || state == "" {
+	if state == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Missing required parameters: provider and state are required",
+			"error": "Missing required parameter: state is required",
 		})
 		return
 	}
 
-	if provider != "google" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid provider. Supported provider: google",
-		})
-		return
-	}
-
+	provider := "google" // Only Google is supported
 	log.Printf("🚀 Started OAuth flow: %s (provider: %s, platform: %s)", state, provider, platform)
 
 	// Store platform metadata in Redis for callback routing (NOT for state validation)
@@ -126,17 +119,10 @@ func (h *OAuthHandler) StartOAuth(c *gin.Context) {
 	}
 
 	// Get OAuth URL with offline access for refresh tokens
-	var authURL string
-	switch provider {
-	case "google":
-		authURL = h.googleConfig.AuthCodeURL(state,
-			oauth2.AccessTypeOffline,
-			oauth2.ApprovalForce,
-			oauth2.SetAuthURLParam("include_granted_scopes", "true"))
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported provider"})
-		return
-	}
+	authURL := h.googleConfig.AuthCodeURL(state,
+		oauth2.AccessTypeOffline,
+		oauth2.ApprovalForce,
+		oauth2.SetAuthURLParam("include_granted_scopes", "true"))
 
 	log.Printf("🌐 Redirecting to OAuth provider: %s", authURL)
 
@@ -144,12 +130,12 @@ func (h *OAuthHandler) StartOAuth(c *gin.Context) {
 	c.Redirect(http.StatusFound, authURL)
 }
 
-// HandleCallback handles OAuth callback from providers
+// HandleCallback handles OAuth callback from Google
 func (h *OAuthHandler) HandleCallback(c *gin.Context) {
-	provider := c.Param("provider")
 	code := c.Query("code")
 	state := c.Query("state")
 	errorParam := c.Query("error")
+	provider := "google" // Only Google is supported
 
 	// Check for OAuth errors
 	if errorParam != "" {
@@ -195,24 +181,11 @@ func (h *OAuthHandler) HandleCallback(c *gin.Context) {
 		}
 	}
 
-	// Exchange code for token and get user info
-	var user *auth.OAuthUser
-	var oauthToken *oauth2.Token
-	var err error
-
-	switch provider {
-	case "google":
-		user, oauthToken, err = h.handleGoogleCallback(code)
-	default:
-		errorMsg := "Unsupported provider"
-		log.Printf("❌ %s", errorMsg)
-		h.redirectToFrontendWithError(c, "invalid_request", errorMsg, callbackPlatform)
-		return
-	}
-
+	// Exchange code for token and get user info from Google
+	user, oauthToken, err := h.handleGoogleCallback(code)
 	if err != nil {
-		log.Printf("❌ Failed to get user info from %s: %v", provider, err)
-		h.redirectToFrontendWithError(c, "server_error", fmt.Sprintf("Failed to authenticate with %s: %v", provider, err), callbackPlatform)
+		log.Printf("❌ Failed to get user info from Google: %v", err)
+		h.redirectToFrontendWithError(c, "server_error", fmt.Sprintf("Failed to authenticate with Google: %v", err), callbackPlatform)
 		return
 	}
 

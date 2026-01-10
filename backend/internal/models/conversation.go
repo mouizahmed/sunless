@@ -50,3 +50,13 @@ type ConversationAttachment struct {
 	UpdatedAt  time.Time        `json:"updated_at" db:"updated_at"`
 	DeletedAt  *time.Time       `json:"deleted_at,omitempty" db:"deleted_at"`
 }
+
+type ConversationSummary struct {
+	ID            string    `json:"id" db:"id"`
+	SessionID     string    `json:"session_id" db:"session_id"`
+	Type          string    `json:"type" db:"type"`
+	Content       string    `json:"content" db:"content"`
+	LastMessageID string    `json:"last_message_id" db:"last_message_id"`
+	CreatedAt     time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at" db:"updated_at"`
+}

@@ -52,7 +52,7 @@ async function handleOAuth(provider: 'google'): Promise<string> {
     const state = generateOAuthState()
     storeTemporaryState(state)
 
-    const authUrl = `${config.backendUrl}/auth/start?provider=${provider}&state=${state}&platform=desktop`
+    const authUrl = `${config.backendUrl}/auth/start?state=${state}&platform=desktop`
     await shell.openExternal(authUrl)
 
     return JSON.stringify({

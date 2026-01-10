@@ -52,6 +52,7 @@ func main() {
 	userRepo := repository.NewUserRepository(db)
 	oauthTokenRepo := repository.NewOAuthTokenRepository(db)
 	conversationRepo := repository.NewConversationRepository(db)
+	memoryRepo := repository.NewMemoryRepository(db)
 
 	// Initialize direct Redis client for OAuth codes
 	redisClient := redis.NewClient(&redis.Options{
@@ -68,14 +69,13 @@ func main() {
 
 	// Initialize handlers
 	oauthHandler := handlers.NewOAuthHandler(userRepo, oauthTokenRepo, redisClient)
-	calendarHandler := handlers.NewCalendarHandler(oauthTokenRepo)
 	userHandler := handlers.NewUserHandler(userRepo)
 	b2Client, err := storage.NewB2Client()
 	if err != nil {
 		log.Fatalf("Failed to initialize B2 client: %v", err)
 	}
 
-	chatHandler, chatInitErr := handlers.NewChatHandler(conversationRepo, b2Client)
+	chatHandler, chatInitErr := handlers.NewChatHandler(conversationRepo, memoryRepo, b2Client)
 	if chatInitErr != nil && !errors.Is(chatInitErr, handlers.ErrMissingOpenAIApiKey) {
 		log.Fatalf("Failed to initialize chat handler: %v", chatInitErr)
 	}
@@ -108,8 +108,8 @@ func main() {
 	auth := router.Group("/auth")
 	{
 		auth.GET("/start", oauthHandler.StartOAuth)
-		auth.GET("/callback/:provider", oauthHandler.HandleCallback) // Keep for legacy/direct backend flow
-		auth.POST("/complete", oauthHandler.CompleteAuth)            // Complete auth with one-time code
+		auth.GET("/callback", oauthHandler.HandleCallback)
+		auth.POST("/complete", oauthHandler.CompleteAuth) // Complete auth with one-time code
 	}
 
 	// Authenticated API routes
@@ -122,8 +122,7 @@ func main() {
 		// User routes
 		authenticated.GET("/user/me", userHandler.GetCurrentUser)
 
-		// Calendar routes
-		authenticated.GET("/calendar/upcoming", calendarHandler.GetUpcomingEvents)
+		// Chat routes
 		authenticated.GET("/chat/sessions", chatHandler.ListSessions)
 		authenticated.GET("/chat/sessions/:sessionID", chatHandler.GetSessionHistory)
 		authenticated.POST("/chat/send", chatHandler.SendMessage)

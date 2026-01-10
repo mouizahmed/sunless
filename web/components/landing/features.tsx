@@ -35,15 +35,6 @@ export default function Features() {
                   className="w-8 h-8"
                 />
               </div>
-              <div className="aspect-square bg-purple-50 rounded-xl flex items-center justify-center p-2">
-                <Image
-                  src="/microsoft-teams.svg"
-                  alt="Microsoft Teams"
-                  width={32}
-                  height={32}
-                  className="w-8 h-8"
-                />
-              </div>
               <div className="aspect-square bg-green-50 rounded-xl flex items-center justify-center p-2">
                 <Image
                   src="/facetime.svg"
