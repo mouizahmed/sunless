@@ -59,6 +59,10 @@ contextBridge.exposeInMainWorld('windowControl', {
     ipcRenderer.send('set-window-height', height)
   },
 
+  setWindowSize: (width: number, height: number) => {
+    ipcRenderer.send('set-window-size', { width, height })
+  },
+
   onDragOffset: (callback: (offset: { x: number; y: number }) => void) => {
     ipcRenderer.on('drag-offset', (_event, offset) => callback(offset))
   },
@@ -66,6 +70,12 @@ contextBridge.exposeInMainWorld('windowControl', {
   onFocusInput: (callback: () => void) => {
     ipcRenderer.on('focus-input', () => callback())
   }
+})
+
+// Dashboard window controls
+contextBridge.exposeInMainWorld('dashboard', {
+  open: (noteId?: string) => ipcRenderer.send('dashboard:open', { noteId }),
+  close: () => ipcRenderer.send('dashboard:close'),
 })
 
 // Screenshot API
@@ -131,6 +141,7 @@ contextBridge.exposeInMainWorld('shortcutControl', {
   update: (action: ShortcutAction, shortcut: string | null) =>
     ipcRenderer.invoke('shortcuts:update', { action, shortcut }) as Promise<ShortcutState>,
 })
+
 
 // Authentication API
 contextBridge.exposeInMainWorld('electronAPI', {

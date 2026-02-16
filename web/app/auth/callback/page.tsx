@@ -60,53 +60,48 @@ function AuthCallbackContent() {
   // Show error state
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 to-red-100 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
-          <div className="flex justify-center mb-6">
-            <Image
-              src="/logo2.png"
-              alt="Sunless Logo"
-              width={80}
-              height={80}
-              className="rounded-xl"
-            />
-          </div>
+      <div className="min-h-screen bg-gradient-to-b from-rose-50 via-rose-50 to-rose-100 flex items-center justify-center px-6 py-10 text-center">
+        <div className="flex w-full max-w-xl flex-col items-center gap-6">
+          <Image
+            src="/logo2.png"
+            alt="Sunless Logo"
+            width={80}
+            height={80}
+            className="rounded-2xl"
+          />
 
-          <div className="space-y-6">
-            <div className="flex justify-center">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
-                <svg
-                  className="w-8 h-8 text-red-700"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </div>
-            </div>
-
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                Authentication Failed
-              </h1>
-              <p className="text-gray-600">
-                Authentication was cancelled or failed
-              </p>
-            </div>
-
-            <button
-              onClick={() => router.push("/")}
-              className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-200 text-rose-700 shadow-sm">
+            <svg
+              className="h-6 w-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
             >
-              Go Home
-            </button>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
           </div>
+
+          <div className="space-y-3">
+            <h1 className="font-serif text-3xl text-rose-950 sm:text-4xl">
+              Authentication Failed
+            </h1>
+            <p className="text-sm text-rose-700/80 sm:text-base">
+              Authentication was cancelled or failed. You can return to the
+              homepage and try again.
+            </p>
+          </div>
+
+          <button
+            onClick={() => router.push("/")}
+            className="rounded-full bg-purple-600 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-purple-200/70 transition hover:bg-purple-700"
+          >
+            Go Home
+          </button>
         </div>
       </div>
     );
@@ -114,65 +109,37 @@ function AuthCallbackContent() {
 
   // Show success state
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-violet-100 flex flex-col items-center justify-center p-4">
-      <div className="mb-8">
+    <div className="min-h-screen bg-gradient-to-b from-[#f7f1ff] via-[#f3edff] to-[#ede7ff] flex items-center justify-center px-6 py-12 text-center">
+      <div className="flex w-full max-w-2xl flex-col items-center gap-6">
         <Image
           src="/logo2.png"
           alt="Sunless Logo"
-          width={80}
-          height={80}
-          className="rounded-xl"
+          width={88}
+          height={88}
+          className="rounded-2xl"
         />
-      </div>
 
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
-        <div className="space-y-6">
-          <div className="flex justify-center">
-            <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center">
-              <svg
-                className="w-8 h-8 text-purple-600"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-            </div>
-          </div>
-
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              Authentication Successful
-            </h1>
-            <p className="text-gray-600">
-              You should be redirected to the app automatically.
-            </p>
-          </div>
-
-          {code && (
-            <div className="space-y-4">
-              <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
-                <p className="text-sm text-purple-800">
-                  If the app didn&apos;t open automatically, click the button
-                  below.
-                </p>
-              </div>
-
-              <button
-                onClick={handleManualOpen}
-                className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-              >
-                <ExternalLink className="w-4 h-4" />
-                Open Sunless
-              </button>
-            </div>
-          )}
+        <div className="space-y-3">
+          <h1 className="font-serif text-4xl text-purple-950 sm:text-5xl">
+            Opening Sunless...
+          </h1>
+          <p className="text-sm text-purple-700/80 sm:text-base">
+            Your browser should prompt you to open the app automatically.
+          </p>
         </div>
+
+        {code && (
+          <div className="space-y-2 text-sm text-purple-700/80">
+            <span className="block">Nothing happened?</span>
+            <button
+              onClick={handleManualOpen}
+              className="inline-flex items-center gap-2 text-purple-700 underline decoration-purple-400 underline-offset-4 transition hover:text-purple-900"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Click here to open Sunless.
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -182,10 +149,10 @@ export default function AuthCallback() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-gradient-to-br from-purple-50 to-violet-100 flex items-center justify-center p-4">
-          <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading...</p>
+        <div className="min-h-screen bg-gradient-to-b from-[#f7f1ff] via-[#f3edff] to-[#ede7ff] flex items-center justify-center px-6 py-12 text-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="h-12 w-12 animate-spin rounded-full border-2 border-purple-300 border-t-purple-700"></div>
+            <p className="text-sm text-purple-700/80">Loading...</p>
           </div>
         </div>
       }

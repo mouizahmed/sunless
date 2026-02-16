@@ -1,0 +1,174 @@
+import type { NoteRecord } from '@/types/note'
+import { auth } from '@/config/firebase'
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api'
+
+type ApiNote = {
+  id: string
+  user_id: string
+  folder_id?: string | null
+  title: string
+  note_markdown: string
+  transcript_text: string
+  enhanced_markdown: string
+  created_at: string
+  updated_at: string
+}
+
+function toNoteRecord(note: ApiNote): NoteRecord {
+  return {
+    id: note.id,
+    title: note.title,
+    folderId: note.folder_id ?? undefined,
+    noteMarkdown: note.note_markdown ?? '',
+    transcriptText: note.transcript_text ?? '',
+    aiEnhancedMarkdown: note.enhanced_markdown ?? '',
+    createdAt: Date.parse(note.created_at),
+    updatedAt: Date.parse(note.updated_at),
+  }
+}
+
+async function getIdToken() {
+  const currentUser = auth.currentUser
+  if (!currentUser) {
+    throw new Error('Not authenticated')
+  }
+  return await currentUser.getIdToken()
+}
+
+async function fetchJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
+  const response = await fetch(input, init)
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string }
+    throw new Error(payload.error || 'Request failed')
+  }
+  return (await response.json()) as T
+}
+
+export async function listNotes(_userId?: string): Promise<NoteRecord[]> {
+  const collected: NoteRecord[] = []
+  let cursor: string | null = null
+  do {
+    const page = await listNotesPage({ limit: 100, cursor })
+    collected.push(...page.notes)
+    cursor = page.nextCursor ?? null
+  } while (cursor)
+  return collected
+}
+
+export async function listNotesPage(params: {
+  folderId?: string
+  unfiled?: boolean
+  limit?: number
+  cursor?: string | null
+}): Promise<{ notes: NoteRecord[]; nextCursor?: string; hasMore: boolean }> {
+  const idToken = await getIdToken()
+  const limit = params.limit ?? 20
+  const url = new URL(`${API_BASE_URL}/notes`)
+  url.searchParams.set('limit', String(limit))
+  if (params.cursor) url.searchParams.set('cursor', params.cursor)
+  if (params.folderId) url.searchParams.set('folder_id', params.folderId)
+  if (params.unfiled) url.searchParams.set('unfiled', 'true')
+
+  const payload = await fetchJson<{
+    notes: ApiNote[]
+    pagination?: { has_more?: boolean; next_cursor?: string | null }
+  }>(url.toString(), {
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${idToken}`,
+    },
+  })
+
+  const notes = (payload.notes ?? []).map(toNoteRecord)
+  const hasMore = Boolean(payload.pagination?.has_more)
+  const nextCursor = payload.pagination?.next_cursor ?? undefined
+
+  return { notes, hasMore, nextCursor }
+}
+
+export async function getNote(_userId: string | undefined, noteId: string): Promise<NoteRecord | null> {
+  const idToken = await getIdToken()
+  const payload = await fetchJson<{ note?: ApiNote }>(`${API_BASE_URL}/notes/${noteId}`, {
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${idToken}`,
+    },
+  })
+  return payload.note ? toNoteRecord(payload.note) : null
+}
+
+export async function createNote(
+  _userId?: string,
+  initial?: { id?: string; title?: string; folderId?: string | null; noteMarkdown?: string; transcriptText?: string },
+): Promise<NoteRecord> {
+  const idToken = await getIdToken()
+  const payload = await fetchJson<{ note?: ApiNote }>(`${API_BASE_URL}/notes`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Authorization: `Bearer ${idToken}`,
+    },
+    body: JSON.stringify({
+      title: initial?.title,
+      folder_id: initial?.folderId ?? null,
+      note_markdown: initial?.noteMarkdown,
+      transcript_text: initial?.transcriptText,
+    }),
+  })
+  if (!payload.note) {
+    throw new Error('Failed to create note')
+  }
+  return toNoteRecord(payload.note)
+}
+
+export async function updateNote(
+  _userId: string | undefined,
+  noteId: string,
+  patch: { title?: string; folderId?: string | null; noteMarkdown?: string; transcriptText?: string; aiEnhancedMarkdown?: string },
+): Promise<NoteRecord | null> {
+  const idToken = await getIdToken()
+  const payload = await fetchJson<{ note?: ApiNote }>(`${API_BASE_URL}/notes/${noteId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Authorization: `Bearer ${idToken}`,
+    },
+    body: JSON.stringify({
+      title: patch.title,
+      folder_id: patch.folderId,
+      note_markdown: patch.noteMarkdown,
+      transcript_text: patch.transcriptText,
+      enhanced_markdown: patch.aiEnhancedMarkdown,
+    }),
+  })
+  return payload.note ? toNoteRecord(payload.note) : null
+}
+
+export async function uploadNoteImage(noteId: string, file: File): Promise<string> {
+  const idToken = await getIdToken()
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch(`${API_BASE_URL}/notes/${noteId}/images`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${idToken}` },
+    body: form,
+  })
+  if (!res.ok) throw new Error('Upload failed')
+  const data = (await res.json()) as { url: string }
+  return data.url
+}
+
+export async function deleteNote(_userId: string | undefined, noteId: string): Promise<boolean> {
+  const idToken = await getIdToken()
+  await fetchJson(`${API_BASE_URL}/notes/${noteId}`, {
+    method: 'DELETE',
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${idToken}`,
+    },
+  })
+  return true
+}

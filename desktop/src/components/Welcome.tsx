@@ -25,7 +25,7 @@ const Welcome = forwardRef<HTMLDivElement, WelcomeProps>(function Welcome({ onMo
 
   return (
     <div ref={ref} className="flex w-full items-center justify-center">
-      <div className="flex w-full max-w-xl flex-col gap-4 rounded-xl border border-white/10 bg-black/70 p-4 text-white backdrop-blur-xl">
+      <div className="flex w-full flex-col gap-4 rounded-xl border border-white/10 bg-black/70 p-4 text-white backdrop-blur-xl">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div
@@ -39,7 +39,7 @@ const Welcome = forwardRef<HTMLDivElement, WelcomeProps>(function Welcome({ onMo
                 Sunless
               </span>
               <span className="text-sm text-white/70">
-                Sign in to keep the floating bar ready.
+                Sign in to keep your notepad ready.
               </span>
             </div>
           </div>
@@ -53,7 +53,7 @@ const Welcome = forwardRef<HTMLDivElement, WelcomeProps>(function Welcome({ onMo
 
         {!isWaitingForBrowser && (
           <p className="text-sm text-white/60">
-            Link your account to sync attachments, history, and settings across every Sunless window.
+            Link your account to keep notes and settings consistent across devices.
           </p>
         )}
 

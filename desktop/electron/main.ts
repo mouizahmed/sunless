@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { setupAuthHandlers } from './auth-handlers'
 import { setupProtocolHandler, setupProtocolEvents, setMainWindow } from './protocol-handler'
-import { createWindow, getWindow, setWindow } from './window'
+import { createWindow, getWindow, setAppQuitting, setWindow } from './window'
 import { setupAttachmentHandlers } from './attachments'
 import {
   registerKeyboardShortcuts,
@@ -12,6 +12,7 @@ import {
 } from './shortcuts'
 import { handleFullScreenshotShortcut } from './screenshots'
 import { setupIpcHandlers } from './ipc-handlers'
+import { destroyTray, setupTray } from './tray'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -23,6 +24,7 @@ setupProtocolHandler()
 // Single instance lock - ensure only one instance of the app runs
 // This is critical for protocol handling (sunless:// URLs)
 const gotTheLock = app.requestSingleInstanceLock()
+let isQuitting = false
 
 if (!gotTheLock) {
   // Another instance is already running, quit this one
@@ -43,6 +45,15 @@ if (!gotTheLock) {
 
     // Create the main window
     const win = createWindow()
+
+    // Setup system tray (keep app running even if windows are closed)
+    setupTray({
+      onQuit: () => {
+        isQuitting = true
+        setAppQuitting(true)
+        app.quit()
+      },
+    })
 
     // Register keyboard shortcuts after window is ready
     win.webContents.on('did-finish-load', () => {
@@ -79,7 +90,8 @@ if (!gotTheLock) {
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+  // With a tray icon we keep the app running. Only quit when explicitly requested.
+  if (isQuitting) {
     app.quit()
     setWindow(null)
     setMainWindow(null)
@@ -96,5 +108,8 @@ app.on('activate', () => {
 
 // Cleanup shortcuts on quit
 app.on('will-quit', () => {
+  isQuitting = true
+  setAppQuitting(true)
   globalShortcut.unregisterAll()
+  destroyTray()
 })

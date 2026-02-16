@@ -44,8 +44,8 @@ const shortcutGroups: ShortcutGroup[] = [
     actions: [
       {
         key: 'toggleVisibility',
-        label: 'Toggle Floating Bar',
-        description: 'Show or hide the floating bar from anywhere.',
+        label: 'Toggle Notepad',
+        description: 'Show or hide the notepad from anywhere.',
       },
     ],
   },
@@ -56,22 +56,22 @@ const shortcutGroups: ShortcutGroup[] = [
       {
         key: 'moveUp',
         label: 'Move Up',
-        description: 'Nudge the bar upward in 10% increments of the current screen.',
+        description: 'Nudge the window upward in 10% increments of the current screen.',
       },
       {
         key: 'moveDown',
         label: 'Move Down',
-        description: 'Nudge the bar downward in 10% increments of the current screen.',
+        description: 'Nudge the window downward in 10% increments of the current screen.',
       },
       {
         key: 'moveLeft',
         label: 'Move Left',
-        description: 'Nudge the bar left in 10% increments of the current screen.',
+        description: 'Nudge the window left in 10% increments of the current screen.',
       },
       {
         key: 'moveRight',
         label: 'Move Right',
-        description: 'Nudge the bar right in 10% increments of the current screen.',
+        description: 'Nudge the window right in 10% increments of the current screen.',
       },
     ],
   },
@@ -302,7 +302,7 @@ export default function SettingsPanel({
             variant="ghost"
             className="h-8 w-8 shrink-0 rounded-md bg-white/20 p-0 text-white hover:bg-white/20 hover:text-white"
             onClick={onClose}
-            title="Return to bar"
+            title="Return to notepad"
           >
             <CornerDownLeft className="h-4 w-4" />
           </Button>
@@ -320,7 +320,7 @@ export default function SettingsPanel({
                 Keybinds
               </h3>
               <p className="text-xs text-white/60">
-                Manage the global shortcuts registered by the floating bar.
+                Manage the global shortcuts registered by the notepad.
               </p>
             </div>
           </div>

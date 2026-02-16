@@ -53,6 +53,10 @@ func main() {
 	oauthTokenRepo := repository.NewOAuthTokenRepository(db)
 	conversationRepo := repository.NewConversationRepository(db)
 	memoryRepo := repository.NewMemoryRepository(db)
+	noteRepo := repository.NewNoteRepository(db)
+	folderRepo := repository.NewFolderRepository(db)
+	recordingRepo := repository.NewRecordingSessionRepository(db)
+	noteAttachmentRepo := repository.NewNoteAttachmentRepository(db)
 
 	// Initialize direct Redis client for OAuth codes
 	redisClient := redis.NewClient(&redis.Options{
@@ -70,6 +74,7 @@ func main() {
 	// Initialize handlers
 	oauthHandler := handlers.NewOAuthHandler(userRepo, oauthTokenRepo, redisClient)
 	userHandler := handlers.NewUserHandler(userRepo)
+	folderHandler := handlers.NewFoldersHandler(folderRepo)
 	b2Client, err := storage.NewB2Client()
 	if err != nil {
 		log.Fatalf("Failed to initialize B2 client: %v", err)
@@ -81,6 +86,14 @@ func main() {
 	}
 	if errors.Is(chatInitErr, handlers.ErrMissingOpenAIApiKey) {
 		log.Println("warning: OPENAI_API_KEY is not set; chat endpoint will be disabled until configured")
+	}
+
+	notesHandler, notesInitErr := handlers.NewNotesHandler(noteRepo, folderRepo, recordingRepo, b2Client, noteAttachmentRepo)
+	if notesInitErr != nil && !errors.Is(notesInitErr, handlers.ErrMissingOpenAIApiKey) {
+		log.Fatalf("Failed to initialize notes handler: %v", notesInitErr)
+	}
+	if errors.Is(notesInitErr, handlers.ErrMissingOpenAIApiKey) {
+		log.Println("warning: OPENAI_API_KEY is not set; notes enhancement endpoint will be disabled until configured")
 	}
 
 	// Initialize the router
@@ -126,6 +139,24 @@ func main() {
 		authenticated.GET("/chat/sessions", chatHandler.ListSessions)
 		authenticated.GET("/chat/sessions/:sessionID", chatHandler.GetSessionHistory)
 		authenticated.POST("/chat/send", chatHandler.SendMessage)
+
+		// Notes routes
+		authenticated.GET("/notes", notesHandler.ListNotes)
+		authenticated.GET("/notes/:noteID", notesHandler.GetNote)
+		authenticated.POST("/notes", notesHandler.CreateNote)
+		authenticated.PATCH("/notes/:noteID", notesHandler.UpdateNote)
+		authenticated.DELETE("/notes/:noteID", notesHandler.DeleteNote)
+		authenticated.POST("/notes/enhance", notesHandler.EnhanceNote)
+		authenticated.POST("/notes/:noteID/images", notesHandler.UploadImage)
+		authenticated.DELETE("/notes/:noteID/images/:imageID", notesHandler.DeleteImage)
+		authenticated.POST("/notes/:noteID/recording/start", notesHandler.StartRecording)
+		authenticated.POST("/notes/:noteID/recording/:sessionID/stop", notesHandler.StopRecording)
+
+		// Folder routes
+		authenticated.GET("/folders", folderHandler.ListFolders)
+		authenticated.POST("/folders", folderHandler.CreateFolder)
+		authenticated.PATCH("/folders/:folderID", folderHandler.RenameFolder)
+		authenticated.DELETE("/folders/:folderID", folderHandler.DeleteFolder)
 	}
 
 	// Start the server

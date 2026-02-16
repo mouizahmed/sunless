@@ -1,6 +1,5 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-
 @custom-variant dark (&:is(.dark *));
 
 :root {
@@ -8,8 +7,8 @@
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: dark;
-  color: rgba(255, 255, 255, 0.87);
+  color-scheme: light dark;
+  color: var(--foreground);
   background-color: transparent;
 
   font-synthesis: none;
@@ -79,28 +78,31 @@ body {
   place-items: flex-start;
 }
 
+/* Desktop-2 style scrollbar (used in dashboard sidebar). */
+.sidebar-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 999px;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgb(82 82 82);
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background-clip: content-box;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(115 115 115);
+}
+
 h1 {
   font-size: 3.2em;
   line-height: 1.1;
-}
-
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
 }
 
 @media (prefers-color-scheme: light) {
@@ -110,9 +112,6 @@ button:focus-visible {
   }
   a:hover {
     color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
   }
 }
 
@@ -195,4 +194,227 @@ button:focus-visible {
   body {
     @apply bg-transparent text-foreground;
   }
+}
+
+/* ── MDXEditor — undo Tailwind preflight ── */
+
+/*
+ * Strategy: DON'T blanket-revert everything — that kills MDXEditor's own
+ * styles and reverts to ugly browser UA defaults. Instead, only undo the
+ * specific Tailwind preflight rules that conflict:
+ *   1. border-width:0 on *  → breaks table cells, toolbar separators
+ *   2. display:block on img/svg → breaks inline toolbar icons
+ *   3. appearance:none + bg:transparent on buttons → strips toolbar buttons
+ *   4. heading/list/table/hr resets → strips content formatting
+ */
+
+/* --- Editor root shell --- */
+.mdx-editor-root {
+  background: transparent !important;
+  border: none !important;
+  font-family: inherit;
+  /* Override MDXEditor's tiny size variables (defaults: base=1rem, sm=0.875rem, xs=0.75rem) */
+  --text-base: 1.125rem;
+  --text-sm: 1rem;
+  --text-xs: 0.875rem;
+  --text-xxs: 0.75rem;
+}
+
+/*
+ * MDXEditor bug: --basePageBg is hardcoded to white and never overridden for
+ * dark mode. This controls dropdown menus, diff-source backgrounds, etc.
+ * We also need to override --baseText/--baseTextContrast for consistency.
+ */
+.mdx-editor-root.dark-theme {
+  --basePageBg: #111113;
+  --baseBase: #111113;
+  --baseBgSubtle: #18191b;
+  --baseBg: #212225;
+  --baseBgHover: #272a2d;
+  --baseBgActive: #2e3135;
+  --baseLine: #363a3f;
+  --baseBorder: #43484e;
+  --baseBorderHover: #5a6169;
+  --baseSolid: #696e77;
+  --baseSolidHover: #777b84;
+  --baseText: #b0b4ba;
+  --baseTextContrast: #edeef0;
+}
+
+/* SVGs: Tailwind sets display:block — restore inline for toolbar icons */
+.mdx-editor-root svg {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* --- Toolbar --- */
+.mdx-editor-root [role="toolbar"] {
+  border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+}
+
+/* --- Content editable area --- */
+.mdx-content-editable {
+  padding: 0.75rem 1rem;
+  font-size: var(--text-base) !important;
+  line-height: 1.75;
+  outline: none;
+}
+
+/* Headings — Tailwind resets font-size/font-weight to inherit */
+.mdx-content-editable h1 {
+  font-size: 1.75em;
+  font-weight: 700;
+  margin: 0.4em 0 0.2em;
+}
+
+.mdx-content-editable h2 {
+  font-size: 1.4em;
+  font-weight: 600;
+  margin: 0.4em 0 0.2em;
+}
+
+.mdx-content-editable h3 {
+  font-size: 1.15em;
+  font-weight: 600;
+  margin: 0.3em 0 0.15em;
+}
+
+.mdx-content-editable h4,
+.mdx-content-editable h5,
+.mdx-content-editable h6 {
+  font-size: 1em;
+  font-weight: 600;
+  margin: 0.3em 0 0.15em;
+}
+
+/* Lists — Tailwind sets list-style:none, margin:0, padding:0 */
+.mdx-content-editable ul {
+  list-style-type: disc;
+  padding-left: 1.5em;
+  margin: 0.25em 0;
+}
+
+.mdx-content-editable ol {
+  list-style-type: decimal;
+  padding-left: 1.5em;
+  margin: 0.25em 0;
+}
+
+.mdx-content-editable li {
+  display: list-item;
+}
+
+.mdx-content-editable input[type="checkbox"] {
+  appearance: auto;
+  margin-right: 0.4em;
+}
+
+/* Blockquote — Tailwind strips margin */
+.mdx-content-editable blockquote {
+  border-left: 3px solid rgba(128, 128, 128, 0.4);
+  padding-left: 1em;
+  margin: 0.25em 0;
+  opacity: 0.85;
+}
+
+/* Horizontal rule — Tailwind sets border-width:0 */
+.mdx-content-editable hr {
+  border: none;
+  border-top: 1px solid rgba(128, 128, 128, 0.3);
+  margin: 0.75em 0;
+}
+
+/* Links */
+.mdx-content-editable a {
+  color: #646cff;
+  text-decoration: underline;
+}
+
+/* Inline formatting */
+.mdx-content-editable strong {
+  font-weight: 700;
+}
+
+.mdx-content-editable em {
+  font-style: italic;
+}
+
+.mdx-content-editable s {
+  text-decoration: line-through;
+}
+
+.mdx-content-editable sub {
+  vertical-align: sub;
+  font-size: 0.75em;
+}
+
+.mdx-content-editable sup {
+  vertical-align: super;
+  font-size: 0.75em;
+}
+
+/* Inline code */
+.mdx-content-editable code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875em;
+  background: rgba(128, 128, 128, 0.15);
+  padding: 0.15em 0.3em;
+  border-radius: 3px;
+}
+
+/* Code blocks */
+.mdx-content-editable pre {
+  background: rgba(128, 128, 128, 0.1);
+  border-radius: 6px;
+  padding: 0.75em 1em;
+  margin: 0.5em 0;
+  overflow-x: auto;
+}
+
+.mdx-content-editable pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-size: 0.85em;
+}
+
+/* Tables — Tailwind sets border-width:0 which hides cell borders */
+.mdx-content-editable table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5em 0;
+}
+
+.mdx-content-editable th,
+.mdx-content-editable td {
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  padding: 0.4em 0.75em;
+  text-align: left;
+}
+
+.mdx-content-editable th {
+  font-weight: 600;
+  background: rgba(128, 128, 128, 0.1);
+}
+
+/* Images — Tailwind sets display:block */
+.mdx-content-editable img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+/* Paragraphs */
+.mdx-content-editable p {
+  margin: 0.25em 0;
+}
+
+/* --- Dark theme — applied via .dark-theme class on the editor root --- */
+.mdx-editor-root.dark-theme .mdx-content-editable {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.mdx-editor-root.dark-theme .mdx-content-editable [data-placeholder]::before {
+  color: rgba(255, 255, 255, 0.35) !important;
 }

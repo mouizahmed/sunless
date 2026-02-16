@@ -1,8 +1,7 @@
 import { ipcMain } from 'electron'
-import { getWindow } from './window'
+import { closeDashboardWindow, createDashboardWindow, getDashboardWindow, getWindow } from './window'
 import {
   registerKeyboardShortcuts,
-  registerMovementShortcuts,
   unregisterMovementShortcuts,
   getShortcutState,
   updateShortcut,
@@ -61,13 +60,66 @@ export function setupIpcHandlers() {
     }
   })
 
+  ipcMain.on('set-window-size', (_event, payload: { width: number; height: number }) => {
+    const win = getWindow()
+    if (!win) return
+    const width = Math.max(420, Math.round(payload?.width ?? 0))
+    const height = Math.max(60, Math.round(payload?.height ?? 0))
+    const [currentWidth, currentHeight] = win.getSize()
+    if (currentWidth === width && currentHeight === height) return
+
+    const [x, y] = win.getPosition()
+    // Keep top-left fixed; grow/shrink down/right.
+    win.setBounds({ x, y, width, height }, false)
+  })
+
   ipcMain.on('toggle-visibility', () => {
     const win = getWindow()
     if (!win) return
     if (win.isVisible()) {
       win.hide()
     } else {
+      // If the dashboard is open, treat "show overlay" as "return to overlay".
+      const dashboard = getDashboardWindow()
+      if (dashboard && !dashboard.isDestroyed()) {
+        closeDashboardWindow()
+      }
       win.show()
+    }
+  })
+
+  ipcMain.on('dashboard:open', (_event, payload?: { noteId?: string }) => {
+    const overlay = getWindow()
+    if (overlay && !overlay.isDestroyed() && overlay.isVisible()) {
+      overlay.hide()
+    }
+
+    const noteId = typeof payload?.noteId === 'string' ? payload.noteId : undefined
+    const dashboard = getDashboardWindow()
+    if (dashboard && !dashboard.isDestroyed()) {
+      if (noteId) {
+        dashboard.webContents.send('dashboard:select-note', { noteId })
+      }
+      dashboard.show()
+      dashboard.focus()
+      return
+    }
+
+    const created = createDashboardWindow(noteId)
+    created.show()
+    created.focus()
+  })
+
+  ipcMain.on('dashboard:close', () => {
+    const dashboard = getDashboardWindow()
+    if (dashboard && !dashboard.isDestroyed()) {
+      closeDashboardWindow()
+    }
+
+    const overlay = getWindow()
+    if (overlay && !overlay.isDestroyed()) {
+      overlay.show()
+      overlay.focus()
     }
   })
 
@@ -126,5 +178,5 @@ export function setupIpcHandlers() {
 
     return result
   })
-}
 
+}

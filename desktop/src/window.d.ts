@@ -39,8 +39,14 @@ interface WindowControl {
   setIgnoreMouseEvents: (ignore: boolean) => void
   toggleVisibility: () => void
   setWindowHeight: (height: number) => void
+  setWindowSize: (width: number, height: number) => void
   onDragOffset: (callback: (offset: { x: number; y: number }) => void) => void
   onFocusInput: (callback: () => void) => void
+}
+
+interface DashboardControl {
+  open: (noteId?: string) => void
+  close: () => void
 }
 
 interface ScreenshotSelection {
@@ -109,6 +115,17 @@ interface LiveInsightsControl {
   clearResponseSuggestion?: () => void
 }
 
+type NoteRecord = {
+  id: string
+  title: string
+  folderId?: string
+  noteMarkdown: string
+  transcriptText: string
+  aiEnhancedMarkdown: string
+  createdAt: number
+  updatedAt: number
+}
+
 interface ElectronAPI {
   // OAuth Authentication
   authenticateWithGoogle: () => Promise<AuthResult>
@@ -134,6 +151,7 @@ declare global {
     shortcutControl?: ShortcutControl
     attachments?: AttachmentsControl
     liveInsights?: LiveInsightsControl
+    dashboard?: DashboardControl
     env: {
       platform: NodeJS.Platform
     }
