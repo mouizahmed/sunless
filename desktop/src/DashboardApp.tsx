@@ -60,7 +60,7 @@ function DashboardContent() {
         <div className="grid h-full min-h-0 grid-rows-[auto_1fr]">
           <DashboardTopBar onBackToOverlay={() => window.dashboard?.close?.()} />
 
-          <div className={`flex h-full min-h-0 p-2 ${isOpen ? 'gap-2' : ''}`}>
+          <div className={`flex h-full min-h-0 px-2 pb-2 ${isOpen ? 'gap-2' : ''}`}>
             <DashboardSidebar />
             <div className="flex-1 min-h-0 min-w-0 overflow-hidden select-none">
               <DashboardWorkspace userId={user?.id} />

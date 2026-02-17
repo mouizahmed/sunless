@@ -9,8 +9,9 @@ import Welcome from '@/components/Welcome'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import './App.css'
-import { createNote, updateNote } from '@/lib/notes-client'
+import { createNote } from '@/lib/notes-client'
 import { auth } from '@/config/firebase'
+import { useTranscription } from '@/hooks/useTranscription'
 
 const WINDOW_VERTICAL_PADDING = 0
 const MAX_APP_HEIGHT = 900
@@ -41,7 +42,30 @@ function AppContent() {
   const [meetingElapsedSeconds, setMeetingElapsedSeconds] = useState(0)
   const [micMuted, setMicMuted] = useState(false)
   const [speakerMuted, setSpeakerMuted] = useState(false)
+  const [transcriptionEnabled, setTranscriptionEnabled] = useState(false)
+  const [transcriptionMode, setTranscriptionMode] = useState<'live' | 'notes_only'>('live')
+  const [transcriptionNotice, setTranscriptionNotice] = useState<string | null>(null)
   const [showDashboardConfirm, setShowDashboardConfirm] = useState(false)
+
+  const isQuotaError = (error: Error) => {
+    const text = `${error.message}`.toLowerCase()
+    return /(quota|limit|minute|credit|billing|insufficient|exceed)/.test(text)
+  }
+
+  const { segments: transcriptSegments, status: transcriptStatus, finalTranscriptText } = useTranscription({
+    enabled: meetingActive && transcriptionEnabled,
+    micMuted,
+    speakerMuted,
+    onError: (err) => {
+      if (isQuotaError(err)) {
+        setTranscriptionEnabled(false)
+        setTranscriptionMode('notes_only')
+        setTranscriptionNotice('Transcript paused: minutes exhausted. Notes continue.')
+        return
+      }
+      console.error('Transcription error:', err)
+    },
+  })
 
   useEffect(() => {
     window.windowControl?.onDragOffset((offset) => {
@@ -169,7 +193,7 @@ function AppContent() {
     return payload.session.id
   }
 
-  const stopRecording = async (noteId: string, sessionId: string) => {
+  const stopRecording = async (noteId: string, sessionId: string, transcript?: string) => {
     const idToken = await getIdToken()
     const response = await fetch(`${API_BASE_URL}/notes/${noteId}/recording/${sessionId}/stop`, {
       method: 'POST',
@@ -178,7 +202,9 @@ function AppContent() {
         Accept: 'application/json',
         Authorization: `Bearer ${idToken}`,
       },
-      body: JSON.stringify({}),
+      body: JSON.stringify({
+        final_transcript: transcript || undefined,
+      }),
     })
 
     if (!response.ok) {
@@ -190,7 +216,7 @@ function AppContent() {
   const endMeeting = async () => {
     if (meetingNoteId && meetingSessionId) {
       try {
-        await stopRecording(meetingNoteId, meetingSessionId)
+        await stopRecording(meetingNoteId, meetingSessionId, finalTranscriptText)
       } catch (error) {
         console.error('Failed to stop recording session', error)
       }
@@ -199,6 +225,16 @@ function AppContent() {
     setMeetingStartedAt(null)
     setMeetingSessionId(null)
     setMeetingNoteId(null)
+    setTranscriptionEnabled(false)
+    setTranscriptionMode('live')
+    setTranscriptionNotice(null)
+  }
+
+  const resumeTranscription = () => {
+    if (!meetingActive) return
+    setTranscriptionMode('live')
+    setTranscriptionNotice(null)
+    setTranscriptionEnabled(true)
   }
 
   const handleToggleMeeting = async () => {
@@ -207,14 +243,27 @@ function AppContent() {
       const title = `Meeting - ${now.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
       try {
         const created = await createNote(user?.id, { title, folderId: null })
-        if (created.folderId) {
-          await updateNote(user?.id, created.id, { folderId: '' })
-        }
-        const sessionId = await startRecording(created.id)
         setMeetingNoteId(created.id)
-        setMeetingSessionId(sessionId)
         setMeetingActive(true)
         setMeetingStartedAt(Date.now())
+        setTranscriptionEnabled(true)
+        setTranscriptionMode('live')
+        setTranscriptionNotice(null)
+
+        try {
+          const sessionId = await startRecording(created.id)
+          setMeetingSessionId(sessionId)
+        } catch (recordingError) {
+          console.error('Failed to start recording', recordingError)
+          setMeetingSessionId(null)
+          setTranscriptionEnabled(false)
+          setTranscriptionMode('notes_only')
+          setTranscriptionNotice(
+            isQuotaError(recordingError instanceof Error ? recordingError : new Error('Failed to start recording'))
+              ? 'Transcript unavailable: minutes exhausted. Notes continue.'
+              : 'Transcript unavailable right now. Notes continue.',
+          )
+        }
       } catch (error) {
         console.error('Failed to start meeting', error)
       }
@@ -296,13 +345,14 @@ function AppContent() {
               speakerMuted={speakerMuted}
               onToggleSpeakerMuted={() => setSpeakerMuted((v) => !v)}
               onOpenDashboard={handleOpenDashboard}
-              onOpenSettings={() => setActivePanel('settings')}
+              settingsOpen={activePanel === 'settings'}
+              onToggleSettings={() =>
+                setActivePanel((current) => (current === 'settings' ? 'main' : 'settings'))
+              }
             />
 
             {activePanel === 'settings' ? (
               <SettingsPanel
-                onClose={() => setActivePanel('main')}
-                onMouseDown={handleMouseDown}
                 onLogout={logout}
                 onLogoutEverywhere={logoutEverywhere}
               />
@@ -310,6 +360,11 @@ function AppContent() {
               <CompactMeetingPanel
                 noteId={meetingNoteId}
                 userId={user.id}
+                transcriptSegments={transcriptSegments}
+                transcriptStatus={transcriptStatus}
+                transcriptionMode={transcriptionMode}
+                transcriptionNotice={transcriptionNotice}
+                onResumeTranscription={resumeTranscription}
               />
             ) : null}
           </>

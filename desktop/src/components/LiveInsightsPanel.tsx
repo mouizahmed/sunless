@@ -51,7 +51,6 @@ const STATUS_CONFIG: Record<
 
 const SOURCE_LABEL: Record<string, string> = {
   audio: 'Audio',
-  screenshot: 'Screenshot',
   unknown: 'Unknown',
 }
 

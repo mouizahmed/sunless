@@ -49,12 +49,36 @@ interface DashboardControl {
   close: () => void
 }
 
+interface ScreenshotSelection {
+  displayId: string
+  x: number
+  y: number
+  width: number
+  height: number
+  scaleFactor: number
+}
+
+interface ScreenshotResult {
+  dataUrl: string
+}
+
+interface ScreenshotControl {
+  start: () => void
+  captureSelection: (selection: ScreenshotSelection) => Promise<ScreenshotResult>
+  cancel: () => void
+  close: () => void
+  onResult: (callback: (result: ScreenshotResult) => void) => () => void
+  onFullScreenshotStart: (callback: () => void) => () => void
+  onFullScreenshotComplete: (callback: (result: { success: boolean }) => void) => () => void
+}
+
 type ShortcutAction =
   | 'moveUp'
   | 'moveDown'
   | 'moveLeft'
   | 'moveRight'
   | 'toggleVisibility'
+  | 'screenshot'
 
 type ShortcutState = {
   current: Record<ShortcutAction, string>
@@ -129,6 +153,7 @@ interface AudioCaptureControl {
 declare global {
   interface Window {
     windowControl: WindowControl
+    screenshot: ScreenshotControl
     electronAPI: ElectronAPI
     shortcutControl?: ShortcutControl
     attachments?: AttachmentsControl

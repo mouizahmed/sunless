@@ -3,17 +3,34 @@ import { Loader2 } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import MarkdownEditor from '@/components/MarkdownEditor'
+import TranscriptPanel from '@/components/TranscriptPanel'
 import { getNote, updateNote } from '@/lib/notes-client'
 import type { NoteRecord } from '@/types/note'
+import type { LiveTranscriptSegment } from '@/types/live-insight'
+
+type TranscriptionStatus = 'idle' | 'connecting' | 'connected' | 'error' | 'disconnected'
 
 type CompactMeetingPanelProps = {
   noteId: string
   userId?: string
+  transcriptSegments?: LiveTranscriptSegment[]
+  transcriptStatus?: TranscriptionStatus
+  transcriptionMode?: 'live' | 'notes_only'
+  transcriptionNotice?: string | null
+  onResumeTranscription?: () => void
 }
 
-export default function CompactMeetingPanel({ noteId, userId }: CompactMeetingPanelProps) {
+export default function CompactMeetingPanel({
+  noteId,
+  userId,
+  transcriptSegments,
+  transcriptStatus,
+  transcriptionMode = 'live',
+  transcriptionNotice = null,
+  onResumeTranscription,
+}: CompactMeetingPanelProps) {
   const [note, setNote] = useState<NoteRecord | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -87,7 +104,7 @@ export default function CompactMeetingPanel({ noteId, userId }: CompactMeetingPa
   const content = useMemo(() => {
     if (isLoading) {
       return (
-        <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-6 text-sm text-white/70">
+        <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/10 px-3 py-5 text-sm text-white/70">
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading…
         </div>
@@ -95,19 +112,19 @@ export default function CompactMeetingPanel({ noteId, userId }: CompactMeetingPa
     }
     if (error) {
       return (
-        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-6 text-sm text-red-100">
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-5 text-sm text-red-100">
           {error}
         </div>
       )
     }
 
     return (
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1.5">
         <Input
           value={draftTitle}
           onChange={(e) => setDraftTitle(e.target.value)}
           placeholder="Meeting title…"
-          className="h-10 border-white/10 bg-white/10 text-white placeholder:text-white/40 focus-visible:border-white/20"
+          className="h-8 border-white/10 bg-white/10 text-white placeholder:text-white/40 focus-visible:border-white/20"
         />
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as 'original' | 'transcript')}>
@@ -121,7 +138,7 @@ export default function CompactMeetingPanel({ noteId, userId }: CompactMeetingPa
           </TabsList>
         </Tabs>
 
-        <div className="min-h-[220px] overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+        <div className="min-h-[220px] overflow-hidden rounded-lg border border-white/10 bg-white/5">
           {tab === 'original' ? (
             <MarkdownEditor
               markdown={draftNote}
@@ -132,24 +149,72 @@ export default function CompactMeetingPanel({ noteId, userId }: CompactMeetingPa
               noteId={noteId}
             />
           ) : (
-            <textarea
-              value={draftTranscript}
-              onChange={(e) => setDraftTranscript(e.target.value)}
-              placeholder="Transcript text…"
-              className={cn(
-                'attachments-scrollbar min-h-[220px] w-full resize-none bg-transparent px-4 py-3 text-sm leading-relaxed text-white/90 placeholder:text-white/35 outline-none',
+            <div className="attachments-scrollbar min-h-[220px] overflow-y-auto px-2.5 py-2 text-sm leading-relaxed text-white/90">
+              {transcriptionNotice ? (
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-2 text-xs text-amber-100">
+                  <span>{transcriptionNotice}</span>
+                  {transcriptionMode === 'notes_only' && onResumeTranscription ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-7 bg-violet-600 px-2.5 text-[11px] text-white hover:bg-violet-700"
+                      onClick={onResumeTranscription}
+                    >
+                      Resume transcription
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {transcriptSegments && transcriptSegments.length > 0 ? (
+                <TranscriptPanel
+                  segments={transcriptSegments}
+                  status={
+                    transcriptionMode === 'notes_only'
+                      ? 'disabled'
+                      : transcriptStatus === 'connected'
+                        ? 'live'
+                        : transcriptStatus === 'connecting'
+                          ? 'paused'
+                          : 'disabled'
+                  }
+                  isProcessing={transcriptionMode !== 'notes_only' && transcriptStatus === 'connecting'}
+                  appearance="embedded"
+                  className="min-h-[220px]"
+                />
+              ) : draftTranscript ? (
+                <p className="whitespace-pre-wrap">{draftTranscript}</p>
+              ) : (
+                <p className="text-white/45">
+                  {transcriptionMode === 'notes_only'
+                    ? 'Transcript is paused. Continue taking notes.'
+                    : 'Transcript text will appear here.'}
+                </p>
               )}
-            />
+            </div>
           )}
         </div>
 
       </div>
     )
-  }, [draftNote, draftTitle, draftTranscript, error, isLoading, tab])
+  }, [
+    draftNote,
+    draftTitle,
+    draftTranscript,
+    error,
+    isLoading,
+    noteId,
+    onResumeTranscription,
+    tab,
+    transcriptSegments,
+    transcriptStatus,
+    transcriptionMode,
+    transcriptionNotice,
+  ])
 
   return (
-    <div className="flex w-full flex-col gap-1.5">
-      <div className="rounded-2xl border border-white/10 bg-black/70 px-4 py-3 backdrop-blur-xl">
+    <div className="flex w-full flex-col gap-2">
+      <div className="rounded-lg border border-white/10 bg-black/70 px-2.5 py-2 backdrop-blur-xl">
         {content}
       </div>
     </div>

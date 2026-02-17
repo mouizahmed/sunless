@@ -1,5 +1,5 @@
 import React from 'react'
-import { Grid3X3, Search, Upload } from 'lucide-react'
+import { Grid3X3, Search } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,14 +15,6 @@ export default function DashboardTopBar({
   const isMacOS = window.env?.platform === 'darwin'
   const { isMaximized } = useWindowState()
   const { search, setSearch } = useDashboardNotes()
-
-  const handleUploadFile = () => {
-    console.log('Upload File clicked')
-  }
-
-  const handleNewMeeting = () => {
-    console.log('Start a Session clicked')
-  }
 
   return (
     <div
@@ -62,23 +54,6 @@ export default function DashboardTopBar({
       </div>
 
       <div className="relative z-10 flex items-center gap-1">
-        <Button
-          size="sm"
-          variant="ghost"
-          className="px-2 py-1 text-xs leading-none hover:bg-neutral-100 dark:hover:bg-neutral-800"
-          onClick={handleUploadFile}
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        >
-          <Upload size={12} />
-        </Button>
-        <Button
-          variant="default"
-          className="px-2 py-1 h-auto rounded-md bg-violet-600 text-white hover:bg-violet-700 text-xs leading-none"
-          onClick={handleNewMeeting}
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        >
-          Start a Session
-        </Button>
         <Button
           type="button"
           variant="ghost"

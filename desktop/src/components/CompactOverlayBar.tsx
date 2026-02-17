@@ -1,5 +1,5 @@
 import type { MouseEvent as ReactMouseEvent } from 'react'
-import { Grid3X3, GripVertical, Mic, MicOff, Settings, Volume2, VolumeX } from 'lucide-react'
+import { CornerDownLeft, Grid3X3, GripVertical, Mic, MicOff, Settings, Volume2, VolumeX } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -14,7 +14,8 @@ type CompactOverlayBarProps = {
   speakerMuted: boolean
   onToggleSpeakerMuted: () => void
   onOpenDashboard: () => void
-  onOpenSettings: () => void
+  onToggleSettings: () => void
+  settingsOpen?: boolean
 }
 
 export default function CompactOverlayBar({
@@ -27,7 +28,8 @@ export default function CompactOverlayBar({
   speakerMuted,
   onToggleSpeakerMuted,
   onOpenDashboard,
-  onOpenSettings,
+  onToggleSettings,
+  settingsOpen = false,
 }: CompactOverlayBarProps) {
   const formatElapsed = (totalSeconds?: number) => {
     if (typeof totalSeconds !== 'number') return ''
@@ -126,11 +128,11 @@ export default function CompactOverlayBar({
           size="icon"
           variant="ghost"
           className="h-8 w-8 shrink-0 rounded-md bg-white/20 p-0 text-white hover:bg-white/20 hover:text-white"
-          title="Settings"
-          aria-label="Settings"
-          onClick={onOpenSettings}
+          title={settingsOpen ? 'Back' : 'Settings'}
+          aria-label={settingsOpen ? 'Back' : 'Settings'}
+          onClick={onToggleSettings}
         >
-          <Settings className="h-4 w-4" />
+          {settingsOpen ? <CornerDownLeft className="h-4 w-4" /> : <Settings className="h-4 w-4" />}
         </Button>
       </div>
     </div>

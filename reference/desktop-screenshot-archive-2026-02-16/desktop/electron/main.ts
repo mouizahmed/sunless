@@ -15,6 +15,7 @@ import { setupAttachmentHandlers } from './attachments'
 import {
   registerKeyboardShortcuts,
 } from './shortcuts'
+import { handleFullScreenshotShortcut } from './screenshots'
 import { setupIpcHandlers } from './ipc-handlers'
 import { destroyTray, setupTray } from './tray'
 
@@ -85,13 +86,29 @@ if (!gotTheLock) {
 
     // Register keyboard shortcuts after window is ready
     win.webContents.on('did-finish-load', () => {
-      registerKeyboardShortcuts(() => {
-        const dashboard = getDashboardWindow()
-        if (dashboard && !dashboard.isDestroyed() && dashboard.isVisible()) {
-          closeDashboardWindow()
+      registerKeyboardShortcuts(
+        () => {
+          const dashboard = getDashboardWindow()
+          if (dashboard && !dashboard.isDestroyed() && dashboard.isVisible()) {
+            closeDashboardWindow()
+
+            const overlay = getWindow()
+            if (overlay && !overlay.isDestroyed()) {
+              overlay.show()
+              setTimeout(() => {
+                if (!overlay.isDestroyed() && overlay.isVisible()) {
+                  overlay.focus()
+                }
+              }, 16)
+            }
+            return
+          }
 
           const overlay = getWindow()
-          if (overlay && !overlay.isDestroyed()) {
+          if (!overlay || overlay.isDestroyed()) return
+          if (overlay.isVisible()) {
+            overlay.hide()
+          } else {
             overlay.show()
             setTimeout(() => {
               if (!overlay.isDestroyed() && overlay.isVisible()) {
@@ -99,22 +116,11 @@ if (!gotTheLock) {
               }
             }, 16)
           }
-          return
-        }
-
-        const overlay = getWindow()
-        if (!overlay || overlay.isDestroyed()) return
-        if (overlay.isVisible()) {
-          overlay.hide()
-        } else {
-          overlay.show()
-          setTimeout(() => {
-            if (!overlay.isDestroyed() && overlay.isVisible()) {
-              overlay.focus()
-            }
-          }, 16)
-        }
-      })
+        },
+        () => {
+          void handleFullScreenshotShortcut()
+        },
+      )
     })
 
     // Focus input when window is shown

@@ -17,6 +17,7 @@ type ShortcutAction =
   | 'moveDown'
   | 'moveLeft'
   | 'moveRight'
+  | 'screenshot'
 
 type ShortcutState = {
   current: Record<ShortcutAction, string>

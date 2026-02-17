@@ -8,8 +8,9 @@ const isMac = process.platform === 'darwin'
 
 type MovementAction = 'moveUp' | 'moveDown' | 'moveLeft' | 'moveRight'
 type ShortcutAction = MovementAction | 'toggleVisibility'
+type ShortcutPayloadAction = ShortcutAction | 'screenshot'
 type ShortcutUpdatePayload = {
-  action: ShortcutAction
+  action: ShortcutPayloadAction
   shortcut: string | null
 }
 
@@ -21,6 +22,8 @@ const defaultShortcuts: Record<ShortcutAction, string> = {
   toggleVisibility: isMac ? 'Cmd+Space' : 'Ctrl+Space',
 }
 
+const defaultScreenshotShortcut = isMac ? 'Cmd+Shift+S' : 'Ctrl+Shift+S'
+
 function storageFilePath(fileName: string) {
   const appData = app.getPath('userData')
   return path.join(appData, fileName)
@@ -31,7 +34,8 @@ const shortcutsFilePath = storageFilePath('shortcuts.json')
 function readPersistedShortcuts() {
   try {
     const raw = fs.readFileSync(shortcutsFilePath, 'utf-8')
-    const parsed = JSON.parse(raw) as Partial<Record<ShortcutAction, string>>
+    const parsed = JSON.parse(raw) as Partial<Record<ShortcutPayloadAction, string>>
+
     return parsed
   } catch (error) {
     if (
@@ -47,7 +51,7 @@ function readPersistedShortcuts() {
   }
 }
 
-function writePersistedShortcuts(values: Record<ShortcutAction, string>) {
+function writePersistedShortcuts(values: Record<ShortcutPayloadAction, string>) {
   try {
     fs.mkdirSync(path.dirname(shortcutsFilePath), { recursive: true })
     fs.writeFileSync(shortcutsFilePath, JSON.stringify(values, null, 2), 'utf-8')
@@ -68,10 +72,21 @@ let shortcuts: Record<ShortcutAction, string> = {
   ),
 }
 
+let screenshotShortcut =
+  typeof persistedShortcuts.screenshot === 'string' && persistedShortcuts.screenshot.trim()
+    ? persistedShortcuts.screenshot.trim()
+    : defaultScreenshotShortcut
+
 export function getShortcutState() {
   return {
-    current: { ...shortcuts },
-    defaults: { ...defaultShortcuts },
+    current: {
+      ...shortcuts,
+      screenshot: screenshotShortcut,
+    },
+    defaults: {
+      ...defaultShortcuts,
+      screenshot: defaultScreenshotShortcut,
+    },
   }
 }
 
@@ -146,7 +161,10 @@ export function unregisterMovementShortcuts() {
   })
 }
 
-export function registerKeyboardShortcuts(toggleVisibilityHandler: () => void) {
+export function registerKeyboardShortcuts(
+  toggleVisibilityHandler: () => void,
+  screenshotHandler: () => void,
+) {
   const win = getWindow()
   if (!win) return
 
@@ -165,6 +183,15 @@ export function registerKeyboardShortcuts(toggleVisibilityHandler: () => void) {
       console.error(`Failed to register toggleVisibility (${shortcuts.toggleVisibility}):`, error)
     }
   }
+
+  if (screenshotShortcut) {
+    try {
+      globalShortcut.register(screenshotShortcut, screenshotHandler)
+      console.log(`Registered full-screen screenshot: ${screenshotShortcut}`)
+    } catch (error) {
+      console.error(`Failed to register full-screen screenshot (${screenshotShortcut}):`, error)
+    }
+  }
 }
 
 export function updateShortcut(payload: ShortcutUpdatePayload) {
@@ -174,40 +201,61 @@ export function updateShortcut(payload: ShortcutUpdatePayload) {
     throw new Error('Shortcut action is required')
   }
 
-  if (!(action in shortcuts)) {
+  if (action !== 'screenshot' && !(action in shortcuts)) {
     throw new Error(`Unsupported shortcut action: ${action}`)
   }
 
-  const targetDefault = defaultShortcuts[action]
+  const targetDefault =
+    action === 'screenshot'
+      ? defaultScreenshotShortcut
+      : defaultShortcuts[action as ShortcutAction]
+
   const nextShortcut = (shortcut ?? targetDefault).trim()
 
   if (!nextShortcut) {
     throw new Error('Shortcut value cannot be empty')
   }
 
-  const previousShortcut = shortcuts[action]
+  const previousShortcut =
+    action === 'screenshot'
+      ? screenshotShortcut
+      : shortcuts[action as ShortcutAction]
 
   if (previousShortcut === nextShortcut) {
     return getShortcutState()
   }
 
-  shortcuts = {
-    ...shortcuts,
-    [action]: nextShortcut,
+  if (action === 'screenshot') {
+    screenshotShortcut = nextShortcut
+  } else {
+    shortcuts = {
+      ...shortcuts,
+      [action]: nextShortcut,
+    }
   }
 
   const win = getWindow()
   const windowVisible = Boolean(win?.isVisible())
-  const shouldValidate = action === 'toggleVisibility' || windowVisible
+
+  const shouldValidate =
+    action === 'screenshot' ||
+    action === 'toggleVisibility' ||
+    windowVisible
 
   if (shouldValidate) {
     const isRegistered = globalShortcut.isRegistered(nextShortcut)
 
     if (!isRegistered) {
-      shortcuts = {
-        ...shortcuts,
-        [action]: previousShortcut,
+      // Revert changes
+      if (action === 'screenshot') {
+        screenshotShortcut = previousShortcut
+      } else if (previousShortcut) {
+        shortcuts = {
+          ...shortcuts,
+          [action]: previousShortcut,
+        }
       }
+
       throw new Error(`Failed to register shortcut: ${nextShortcut}`)
     }
   }
@@ -217,3 +265,4 @@ export function updateShortcut(payload: ShortcutUpdatePayload) {
 
   return nextState
 }
+

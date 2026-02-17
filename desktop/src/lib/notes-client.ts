@@ -45,7 +45,8 @@ async function fetchJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> 
   return (await response.json()) as T
 }
 
-export async function listNotes(_userId?: string): Promise<NoteRecord[]> {
+export async function listNotes(userId?: string): Promise<NoteRecord[]> {
+  void userId
   const collected: NoteRecord[] = []
   let cursor: string | null = null
   do {
@@ -87,7 +88,8 @@ export async function listNotesPage(params: {
   return { notes, hasMore, nextCursor }
 }
 
-export async function getNote(_userId: string | undefined, noteId: string): Promise<NoteRecord | null> {
+export async function getNote(userId: string | undefined, noteId: string): Promise<NoteRecord | null> {
+  void userId
   const idToken = await getIdToken()
   const payload = await fetchJson<{ note?: ApiNote }>(`${API_BASE_URL}/notes/${noteId}`, {
     headers: {
@@ -99,9 +101,10 @@ export async function getNote(_userId: string | undefined, noteId: string): Prom
 }
 
 export async function createNote(
-  _userId?: string,
+  userId?: string,
   initial?: { id?: string; title?: string; folderId?: string | null; noteMarkdown?: string; transcriptText?: string },
 ): Promise<NoteRecord> {
+  void userId
   const idToken = await getIdToken()
   const payload = await fetchJson<{ note?: ApiNote }>(`${API_BASE_URL}/notes`, {
     method: 'POST',
@@ -124,10 +127,11 @@ export async function createNote(
 }
 
 export async function updateNote(
-  _userId: string | undefined,
+  userId: string | undefined,
   noteId: string,
   patch: { title?: string; folderId?: string | null; noteMarkdown?: string; transcriptText?: string; aiEnhancedMarkdown?: string },
 ): Promise<NoteRecord | null> {
+  void userId
   const idToken = await getIdToken()
   const payload = await fetchJson<{ note?: ApiNote }>(`${API_BASE_URL}/notes/${noteId}`, {
     method: 'PATCH',
@@ -161,7 +165,8 @@ export async function uploadNoteImage(noteId: string, file: File): Promise<strin
   return data.url
 }
 
-export async function deleteNote(_userId: string | undefined, noteId: string): Promise<boolean> {
+export async function deleteNote(userId: string | undefined, noteId: string): Promise<boolean> {
+  void userId
   const idToken = await getIdToken()
   await fetchJson(`${API_BASE_URL}/notes/${noteId}`, {
     method: 'DELETE',

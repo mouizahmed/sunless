@@ -51,3 +51,37 @@ export function createSecurePath(subpath: string, allowedDirectory?: string): st
   return resolvedPath;
 }
 
+/**
+ * Validates that a file path is safe for screenshot operations
+ * Ensures the path is within allowed directories and has valid extension
+ */
+export function validateScreenshotPath(filePath: string): boolean {
+  try {
+    const allowedExtensions = ['.png', '.jpg', '.jpeg'];
+    const ext = path.extname(filePath).toLowerCase();
+
+    if (!allowedExtensions.includes(ext)) {
+      return false;
+    }
+
+    // Ensure the path is within userData directory
+    const userDataDir = app.getPath('userData');
+    const resolvedPath = path.resolve(filePath);
+    const resolvedUserDataDir = path.resolve(userDataDir);
+
+    return resolvedPath.startsWith(resolvedUserDataDir + path.sep);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Creates a secure temporary file path for screenshots
+ */
+export function createSecureScreenshotPath(prefix = 'screenshot'): string {
+  const timestamp = Date.now();
+  const randomSuffix = Math.random().toString(36).substring(7);
+  const filename = `${sanitizeFilename(prefix)}_${timestamp}_${randomSuffix}.png`;
+
+  return createSecurePath(filename, path.join(app.getPath('userData'), 'screenshots'));
+}

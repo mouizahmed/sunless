@@ -6,7 +6,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -16,24 +15,14 @@ import (
 	"github.com/mouizahmed/justscribe-backend/internal/models"
 	"github.com/mouizahmed/justscribe-backend/internal/repository"
 	"github.com/mouizahmed/justscribe-backend/internal/storage"
-	openai "github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/option"
 )
 
 type NotesHandler struct {
-	openaiClient   *openai.Client
-	apiConfigured  bool
 	noteRepo       *repository.NoteRepository
 	folderRepo     *repository.FolderRepository
 	recordingRepo  *repository.RecordingSessionRepository
 	b2Client       *storage.B2Client
 	attachmentRepo *repository.NoteAttachmentRepository
-}
-
-type EnhanceNoteRequest struct {
-	Title          string `json:"title"`
-	NoteMarkdown   string `json:"note_markdown"`
-	TranscriptText string `json:"transcript_text"`
 }
 
 type CreateNoteRequest struct {
@@ -56,119 +45,18 @@ type StopRecordingRequest struct {
 	FinalTranscript *string `json:"final_transcript"`
 }
 
-func NewNotesHandler(noteRepo *repository.NoteRepository, folderRepo *repository.FolderRepository, recordingRepo *repository.RecordingSessionRepository, b2Client *storage.B2Client, attachmentRepo *repository.NoteAttachmentRepository) (*NotesHandler, error) {
-	apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
-	if apiKey == "" {
-		return &NotesHandler{
-			openaiClient:   nil,
-			apiConfigured:  false,
-			noteRepo:       noteRepo,
-			folderRepo:     folderRepo,
-			recordingRepo:  recordingRepo,
-			b2Client:       b2Client,
-			attachmentRepo: attachmentRepo,
-		}, ErrMissingOpenAIApiKey
-	}
-
-	client := openai.NewClient(option.WithAPIKey(apiKey))
+func NewNotesHandler(noteRepo *repository.NoteRepository, folderRepo *repository.FolderRepository, recordingRepo *repository.RecordingSessionRepository, b2Client *storage.B2Client, attachmentRepo *repository.NoteAttachmentRepository) *NotesHandler {
 	return &NotesHandler{
-		openaiClient:   &client,
-		apiConfigured:  true,
 		noteRepo:       noteRepo,
 		folderRepo:     folderRepo,
 		recordingRepo:  recordingRepo,
 		b2Client:       b2Client,
 		attachmentRepo: attachmentRepo,
-	}, nil
+	}
 }
 
 func (h *NotesHandler) EnhanceNote(c *gin.Context) {
-	if !h.apiConfigured || h.openaiClient == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "notes enhancement service not configured"})
-		return
-	}
-
-	// Ensure caller is authenticated (even though we don't currently store notes server-side).
-	if _, err := getUserID(c); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		return
-	}
-
-	var req EnhanceNoteRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request payload"})
-		return
-	}
-
-	title := strings.TrimSpace(req.Title)
-	if title == "" {
-		title = "Untitled note"
-	}
-
-	notes := strings.TrimSpace(req.NoteMarkdown)
-	transcript := strings.TrimSpace(req.TranscriptText)
-
-	prompt := fmt.Sprintf(`You are an AI note-enhancer.
-
-You will be given:
-- User notes (Markdown)
-- A transcript (plain text)
-
-Your job:
-- Produce an "AI enhanced" version that is cleaner, more structured, and safe to share.
-- Keep it factual; do not invent specifics that aren't present.
-- If key details are missing, include them as explicit open questions.
-- Output MUST be valid Markdown only (no surrounding commentary).
-
-Output format (in this order):
-# %s
-
-## Overview
-- 3–6 bullets summarizing the situation.
-
-## Key details
-- Bullet list of concrete facts (numbers, names, constraints).
-
-## Requirements
-- Bullet list of stated requirements / needs.
-
-## Risks / concerns
-- Bullet list.
-
-## Next steps
-- 3–8 actionable bullets.
-
-## Open questions
-- Bullet list of what is missing or unclear.
-
-Inputs:
-
-### Notes (Markdown)
-%s
-
-### Transcript
-%s
-`, title, notes, transcript)
-
-	resp, err := h.openaiClient.Chat.Completions.New(c.Request.Context(), openai.ChatCompletionNewParams{
-		Model: openai.ChatModelGPT4oMini,
-		Messages: []openai.ChatCompletionMessageParamUnion{
-			openai.UserMessage(prompt),
-		},
-	})
-	if err != nil {
-		log.Printf("notes: enhance failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to enhance note"})
-		return
-	}
-
-	if len(resp.Choices) == 0 {
-		c.JSON(http.StatusOK, gin.H{"enhanced_markdown": ""})
-		return
-	}
-
-	enhanced := strings.TrimSpace(resp.Choices[0].Message.Content)
-	c.JSON(http.StatusOK, gin.H{"enhanced_markdown": enhanced})
+	c.JSON(http.StatusServiceUnavailable, gin.H{"error": "note enhancement is being migrated"})
 }
 
 func (h *NotesHandler) ListNotes(c *gin.Context) {

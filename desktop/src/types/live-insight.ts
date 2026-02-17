@@ -1,4 +1,4 @@
-export type LiveInsightSource = 'audio' | 'screenshot' | 'unknown'
+export type LiveInsightSource = 'audio' | 'unknown'
 
 export type LiveInsightCategory = 'error' | 'suggestion' | 'observation' | 'note'
 
@@ -37,7 +37,11 @@ export type LiveTranscriptSegment = {
   id: string
   text: string
   createdAt: number
-  speaker?: 'user' | 'assistant' | 'system'
+  speaker?: 'user' | 'assistant' | 'system' | string
+  speakerLabel?: string
   pending?: boolean
+  channel?: number
+  startTime?: number
+  endTime?: number
 }
 

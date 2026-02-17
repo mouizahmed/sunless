@@ -10,7 +10,7 @@ export type Attachment = {
   name?: string
   size?: number
   filePath?: string
-  source?: 'screenshot' | 'picker'
+  source?: 'picker'
 }
 
 type AttachmentsBarProps = {
@@ -37,7 +37,7 @@ export default function AttachmentsBar({ attachments, onRemoveAttachment }: Atta
       }}
     >
       {attachments.map((attachment) => {
-        const displayName = attachment.name ?? (attachment.source === 'screenshot' ? 'Screenshot' : undefined)
+        const displayName = attachment.name
         const extension =
           attachment.name && attachment.name.includes('.')
             ? attachment.name.split('.').pop()?.slice(0, 6)?.toUpperCase()

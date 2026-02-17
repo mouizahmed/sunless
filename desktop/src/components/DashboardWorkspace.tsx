@@ -102,7 +102,7 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
     if (!selected.aiEnhancedMarkdown?.trim() && tab === 'enhanced') {
       setTab('original')
     }
-  }, [selected])
+  }, [selected, tab])
 
   const scheduleSave = useCallback(
     (patch: {
@@ -174,8 +174,8 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
 
   return (
     <div className="h-full">
-      <div className="flex h-full flex-col rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-        <div className="flex items-center gap-2 border-b border-neutral-200 p-3 dark:border-neutral-800">
+      <div className="relative flex h-full min-h-0 flex-col rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+        <div className="flex items-center gap-2 border-b border-neutral-200 px-2.5 py-2 dark:border-neutral-800">
           <Input
             value={draftTitle}
             onChange={(e) => setDraftTitle(e.target.value)}
@@ -232,12 +232,12 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
         </div>
 
         {enhanceError ? (
-          <div className="m-3 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200">
+          <div className="m-2.5 rounded-md border border-red-200 bg-red-50 p-2.5 text-xs text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200">
             {enhanceError}
           </div>
         ) : null}
 
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden">
           {!selectedId ? (
             <div className="flex h-full items-center justify-center p-6 text-sm text-neutral-500 dark:text-neutral-400">
               Select a note from the sidebar.
@@ -249,7 +249,7 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
               placeholder="Markdown notes…"
               theme="auto"
               showToolbar
-              className="h-full"
+              className="h-full dashboard-editor"
               noteId={selectedId}
             />
           ) : tab === 'transcript' ? (
@@ -257,30 +257,39 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
               value={draftTranscript}
               onChange={(e) => setDraftTranscript(e.target.value)}
               placeholder="Transcript…"
-              className="h-full w-full resize-none bg-transparent p-3 text-sm text-neutral-900 outline-none dark:text-neutral-50"
+              className="h-full w-full resize-none bg-transparent p-2.5 text-sm text-neutral-900 outline-none dark:text-neutral-50"
             />
           ) : (
-            <div className="h-full overflow-y-auto p-3 sidebar-scrollbar">
+            <div className="h-full overflow-y-auto p-2.5 sidebar-scrollbar">
               {draftEnhanced.trim() ? (
                 <Response>{draftEnhanced}</Response>
               ) : (
-                <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-600 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-400">
+                <div className="rounded-md border border-neutral-200 p-2.5 text-sm text-neutral-600 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-400">
                   Click “Enhance notes” to generate a cleaned-up, shareable doc.
                 </div>
               )}
             </div>
           )}
+
         </div>
-        <div className="border-t border-neutral-200 p-3 dark:border-neutral-800">
-          <Button type="button" className="w-full" onClick={() => void handleEnhance()} disabled={!selectedId || isEnhancing}>
-            {isEnhancing ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Sparkles className="mr-2 h-4 w-4" />
-            )}
-            Enhance notes
-          </Button>
-        </div>
+
+        {selectedId && (tab === 'original' || tab === 'transcript') ? (
+          <div className="pointer-events-none absolute bottom-2.5 left-1/2 z-20 -translate-x-1/2">
+            <Button
+              type="button"
+              className="pointer-events-auto border-0 bg-violet-600 text-white shadow-md hover:bg-violet-700 focus-visible:ring-violet-400"
+              onClick={() => void handleEnhance()}
+              disabled={!selectedId || isEnhancing}
+            >
+              {isEnhancing ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="mr-2 h-4 w-4" />
+              )}
+              Enhance notes
+            </Button>
+          </div>
+        ) : null}
       </div>
     </div>
   )

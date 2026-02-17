@@ -37,7 +37,8 @@ async function fetchJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> 
   return (await response.json()) as T
 }
 
-export async function listFolders(_userId?: string): Promise<FolderRecord[]> {
+export async function listFolders(userId?: string): Promise<FolderRecord[]> {
+  void userId
   const idToken = await getIdToken()
   const payload = await fetchJson<{ folders: ApiFolder[] }>(`${API_BASE_URL}/folders`, {
     headers: {
@@ -48,7 +49,8 @@ export async function listFolders(_userId?: string): Promise<FolderRecord[]> {
   return (payload.folders ?? []).map(toFolderRecord)
 }
 
-export async function createFolder(_userId: string | undefined, name: string): Promise<FolderRecord> {
+export async function createFolder(userId: string | undefined, name: string): Promise<FolderRecord> {
+  void userId
   const idToken = await getIdToken()
   const payload = await fetchJson<{ folder: ApiFolder }>(`${API_BASE_URL}/folders`, {
     method: 'POST',
@@ -63,10 +65,11 @@ export async function createFolder(_userId: string | undefined, name: string): P
 }
 
 export async function renameFolder(
-  _userId: string | undefined,
+  userId: string | undefined,
   folderId: string,
   name: string,
 ): Promise<FolderRecord | null> {
+  void userId
   const idToken = await getIdToken()
   const payload = await fetchJson<{ folder?: ApiFolder }>(`${API_BASE_URL}/folders/${folderId}`, {
     method: 'PATCH',
@@ -80,7 +83,8 @@ export async function renameFolder(
   return payload.folder ? toFolderRecord(payload.folder) : null
 }
 
-export async function deleteFolder(_userId: string | undefined, folderId: string): Promise<boolean> {
+export async function deleteFolder(userId: string | undefined, folderId: string): Promise<boolean> {
+  void userId
   const idToken = await getIdToken()
   await fetchJson(`${API_BASE_URL}/folders/${folderId}`, {
     method: 'DELETE',

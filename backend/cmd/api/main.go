@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -51,8 +50,6 @@ func main() {
 	// Initialize repositories
 	userRepo := repository.NewUserRepository(db)
 	oauthTokenRepo := repository.NewOAuthTokenRepository(db)
-	conversationRepo := repository.NewConversationRepository(db)
-	memoryRepo := repository.NewMemoryRepository(db)
 	noteRepo := repository.NewNoteRepository(db)
 	folderRepo := repository.NewFolderRepository(db)
 	recordingRepo := repository.NewRecordingSessionRepository(db)
@@ -80,21 +77,9 @@ func main() {
 		log.Fatalf("Failed to initialize B2 client: %v", err)
 	}
 
-	chatHandler, chatInitErr := handlers.NewChatHandler(conversationRepo, memoryRepo, b2Client)
-	if chatInitErr != nil && !errors.Is(chatInitErr, handlers.ErrMissingOpenAIApiKey) {
-		log.Fatalf("Failed to initialize chat handler: %v", chatInitErr)
-	}
-	if errors.Is(chatInitErr, handlers.ErrMissingOpenAIApiKey) {
-		log.Println("warning: OPENAI_API_KEY is not set; chat endpoint will be disabled until configured")
-	}
+	notesHandler := handlers.NewNotesHandler(noteRepo, folderRepo, recordingRepo, b2Client, noteAttachmentRepo)
 
-	notesHandler, notesInitErr := handlers.NewNotesHandler(noteRepo, folderRepo, recordingRepo, b2Client, noteAttachmentRepo)
-	if notesInitErr != nil && !errors.Is(notesInitErr, handlers.ErrMissingOpenAIApiKey) {
-		log.Fatalf("Failed to initialize notes handler: %v", notesInitErr)
-	}
-	if errors.Is(notesInitErr, handlers.ErrMissingOpenAIApiKey) {
-		log.Println("warning: OPENAI_API_KEY is not set; notes enhancement endpoint will be disabled until configured")
-	}
+	transcriptionHandler := handlers.NewTranscriptionHandler()
 
 	// Initialize the router
 	router := gin.Default()
@@ -115,6 +100,7 @@ func main() {
 		api.GET("/health", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"status": "ok"})
 		})
+		api.GET("/transcription/stream", transcriptionHandler.Stream)
 	}
 
 	// OAuth routes (no auth required)
@@ -134,11 +120,6 @@ func main() {
 
 		// User routes
 		authenticated.GET("/user/me", userHandler.GetCurrentUser)
-
-		// Chat routes
-		authenticated.GET("/chat/sessions", chatHandler.ListSessions)
-		authenticated.GET("/chat/sessions/:sessionID", chatHandler.GetSessionHistory)
-		authenticated.POST("/chat/send", chatHandler.SendMessage)
 
 		// Notes routes
 		authenticated.GET("/notes", notesHandler.ListNotes)

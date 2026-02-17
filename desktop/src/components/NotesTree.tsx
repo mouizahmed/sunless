@@ -82,6 +82,7 @@ export function NotesTree({
   const renderFolderRow = (f: TreeFolder) => {
     const hasChildren = f.noteIds.length > 0
     const isExpanded = folderExpansions[f.id] ?? false
+    const isFolderActive = selectedFolderId === f.id
 
     const pagination = folderPagination[f.id]
     const showLoadMore = !search.trim() && pagination?.hasMore
@@ -95,9 +96,13 @@ export function NotesTree({
         <Button
           type="button"
           variant="ghost"
-          className="w-full justify-start gap-1 py-1 px-2 text-xs h-7 hover:bg-violet-100/30 dark:hover:bg-violet-900/20"
+          className={cn(
+            'w-full justify-start gap-1 py-1 px-2 text-xs h-7 hover:bg-violet-100/30 dark:hover:bg-violet-900/20',
+            isFolderActive ? 'bg-violet-200/40 dark:bg-violet-800/30' : '',
+          )}
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           onClick={() => {
+            onSelectFolder(f.id)
             if (hasChildren) {
               setFolderExpansions((prev) => ({ ...prev, [f.id]: !(prev[f.id] ?? false) }))
             }

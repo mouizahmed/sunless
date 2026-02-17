@@ -1,10 +1,12 @@
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { Button } from '@/components/ui/button'
-import { Paperclip, History, Settings, GripVertical, Square, Pause, Play } from 'lucide-react'
+import { Spinner } from '@/components/ui/spinner'
+import { Camera, Paperclip, History, Settings, GripVertical, Square, Pause, Play } from 'lucide-react'
 import { AudioLines } from '@/components/animate-ui/icons/audio-lines'
 
 type MainBarProps = {
   onMouseDown: (event: ReactMouseEvent<HTMLDivElement>) => void
+  onScreenshot: () => void
   onAttach: () => void
   onOpenSettings?: () => void
   onOpenHistory?: () => void
@@ -13,10 +15,12 @@ type MainBarProps = {
   onPauseSession: () => void
   onResumeSession: () => void
   onStopSession: () => void
+  isFullScreenshotCapturing: boolean
 }
 
 function MainBar({
   onMouseDown,
+  onScreenshot,
   onAttach,
   onOpenSettings,
   onOpenHistory,
@@ -25,6 +29,7 @@ function MainBar({
   onPauseSession,
   onResumeSession,
   onStopSession,
+  isFullScreenshotCapturing,
 }: MainBarProps) {
   const isPaused = mode === 'paused'
 
@@ -113,6 +118,29 @@ function MainBar({
       <div className="flex-1" />
 
       <div className="flex items-center gap-1.5">
+        {isFullScreenshotCapturing ? (
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8 shrink-0 rounded-md bg-white/20 p-0 text-white hover:bg-white/20 hover:text-white"
+            title="Capturing full screenshot"
+            aria-live="polite"
+            aria-busy="true"
+            disabled
+          >
+            <Spinner size="sm" className="text-white" />
+          </Button>
+        ) : (
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8 shrink-0 rounded-md bg-white/20 p-0 text-white hover:bg-white/20 hover:text-white"
+          title="Screenshot"
+          onClick={onScreenshot}
+        >
+          <Camera className="h-4 w-4" />
+        </Button>
+        )}
         <Button
           size="icon"
           variant="ghost"

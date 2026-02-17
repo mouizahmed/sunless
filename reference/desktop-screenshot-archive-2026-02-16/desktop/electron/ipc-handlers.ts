@@ -8,6 +8,12 @@ import {
   getShortcutState,
   updateShortcut,
 } from './shortcuts'
+import {
+  startScreenshotCapture,
+  closeScreenshotWindow,
+  handleFullScreenshotShortcut,
+  captureScreenSelection,
+} from './screenshots'
 
 let systemAudioProcess: ChildProcess | null = null
 
@@ -121,6 +127,28 @@ export function setupIpcHandlers() {
     }
   })
 
+  // Screenshot IPC handlers
+  ipcMain.on('start-screenshot', () => {
+    startScreenshotCapture()
+  })
+
+  ipcMain.on('screenshot-close', () => {
+    closeScreenshotWindow()
+  })
+
+  ipcMain.on('screenshot-cancel', () => {
+    closeScreenshotWindow()
+  })
+
+  ipcMain.handle('capture-screen-selection', async (_event, payload) => {
+    try {
+      return await captureScreenSelection(payload)
+    } catch (error) {
+      closeScreenshotWindow()
+      throw error
+    }
+  })
+
   // Shortcuts IPC handlers
   ipcMain.handle('shortcuts:get', () => {
     return getShortcutState()
@@ -133,15 +161,20 @@ export function setupIpcHandlers() {
     const result = updateShortcut(payload)
 
     // Re-register shortcuts after update
-    registerKeyboardShortcuts(() => {
-      const win = getWindow()
-      if (!win) return
-      if (win.isVisible()) {
-        win.hide()
-      } else {
-        win.show()
-      }
-    })
+    registerKeyboardShortcuts(
+      () => {
+        const win = getWindow()
+        if (!win) return
+        if (win.isVisible()) {
+          win.hide()
+        } else {
+          win.show()
+        }
+      },
+      () => {
+        void handleFullScreenshotShortcut()
+      },
+    )
 
     if (win && !windowVisible) {
       unregisterMovementShortcuts()

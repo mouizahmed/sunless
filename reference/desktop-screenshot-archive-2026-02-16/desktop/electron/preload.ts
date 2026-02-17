@@ -7,6 +7,7 @@ type ShortcutAction =
   | 'moveLeft'
   | 'moveRight'
   | 'toggleVisibility'
+  | 'screenshot'
 
 type ShortcutState = {
   current: Record<ShortcutAction, string>
@@ -75,6 +76,50 @@ contextBridge.exposeInMainWorld('windowControl', {
 contextBridge.exposeInMainWorld('dashboard', {
   open: (noteId?: string) => ipcRenderer.send('dashboard:open', { noteId }),
   close: () => ipcRenderer.send('dashboard:close'),
+})
+
+// Screenshot API
+contextBridge.exposeInMainWorld('screenshot', {
+  start: () => {
+    ipcRenderer.send('start-screenshot')
+  },
+  captureSelection: (selection: {
+    displayId: string
+    x: number
+    y: number
+    width: number
+    height: number
+    scaleFactor: number
+  }) => {
+    return ipcRenderer.invoke('capture-screen-selection', selection)
+  },
+  cancel: () => {
+    ipcRenderer.send('screenshot-cancel')
+  },
+  close: () => {
+    ipcRenderer.send('screenshot-close')
+  },
+  onResult: (callback: (result: { dataUrl: string }) => void) => {
+    const listener = (_event: IpcRendererEvent, data: { dataUrl: string }) => callback(data)
+    ipcRenderer.on('screenshot-result', listener)
+    return () => {
+      ipcRenderer.off('screenshot-result', listener)
+    }
+  },
+  onFullScreenshotStart: (callback: () => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('screenshot-full-start', listener)
+    return () => {
+      ipcRenderer.off('screenshot-full-start', listener)
+    }
+  },
+  onFullScreenshotComplete: (callback: (result: { success: boolean }) => void) => {
+    const listener = (_event: IpcRendererEvent, data: { success: boolean }) => callback(data)
+    ipcRenderer.on('screenshot-full-complete', listener)
+    return () => {
+      ipcRenderer.off('screenshot-full-complete', listener)
+    }
+  }
 })
 
 contextBridge.exposeInMainWorld('attachments', {
