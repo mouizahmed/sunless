@@ -20,9 +20,9 @@ func NewNoteRepository(db *database.DB) *NoteRepository {
 
 func (r *NoteRepository) CreateNote(note *models.Note) (*models.Note, error) {
 	query := `
-		INSERT INTO notes (user_id, folder_id, title, note_markdown, transcript_text, enhanced_markdown)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, user_id, folder_id, title, note_markdown, transcript_text, enhanced_markdown, created_at, updated_at, deleted_at
+		INSERT INTO notes (user_id, folder_id, title, note_markdown, enhanced_markdown)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, user_id, folder_id, title, note_markdown, enhanced_markdown, created_at, updated_at, deleted_at
 	`
 
 	folderID := toNullString(note.FolderID)
@@ -36,7 +36,6 @@ func (r *NoteRepository) CreateNote(note *models.Note) (*models.Note, error) {
 		folderID,
 		note.Title,
 		note.NoteMarkdown,
-		note.TranscriptText,
 		note.EnhancedMarkdown,
 	).Scan(
 		&created.ID,
@@ -44,7 +43,6 @@ func (r *NoteRepository) CreateNote(note *models.Note) (*models.Note, error) {
 		&folder,
 		&created.Title,
 		&created.NoteMarkdown,
-		&created.TranscriptText,
 		&created.EnhancedMarkdown,
 		&created.CreatedAt,
 		&created.UpdatedAt,
@@ -61,7 +59,7 @@ func (r *NoteRepository) CreateNote(note *models.Note) (*models.Note, error) {
 
 func (r *NoteRepository) ListNotesByUserCursor(userID string, folderID *string, unfiled bool, limit int, cursorUpdatedAt *time.Time, cursorID *string) ([]models.Note, error) {
 	baseQuery := `
-		SELECT id, user_id, folder_id, title, note_markdown, transcript_text, enhanced_markdown, created_at, updated_at, deleted_at
+		SELECT id, user_id, folder_id, title, note_markdown, enhanced_markdown, created_at, updated_at, deleted_at
 		FROM notes
 		WHERE user_id = $1 AND deleted_at IS NULL
 	`
@@ -102,7 +100,6 @@ func (r *NoteRepository) ListNotesByUserCursor(userID string, folderID *string, 
 			&folder,
 			&note.Title,
 			&note.NoteMarkdown,
-			&note.TranscriptText,
 			&note.EnhancedMarkdown,
 			&note.CreatedAt,
 			&note.UpdatedAt,
@@ -124,7 +121,7 @@ func (r *NoteRepository) ListNotesByUserCursor(userID string, folderID *string, 
 
 func (r *NoteRepository) GetNoteByID(userID, noteID string) (*models.Note, error) {
 	query := `
-		SELECT id, user_id, folder_id, title, note_markdown, transcript_text, enhanced_markdown, created_at, updated_at, deleted_at
+		SELECT id, user_id, folder_id, title, note_markdown, enhanced_markdown, created_at, updated_at, deleted_at
 		FROM notes
 		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
 		LIMIT 1
@@ -139,7 +136,6 @@ func (r *NoteRepository) GetNoteByID(userID, noteID string) (*models.Note, error
 		&folder,
 		&note.Title,
 		&note.NoteMarkdown,
-		&note.TranscriptText,
 		&note.EnhancedMarkdown,
 		&note.CreatedAt,
 		&note.UpdatedAt,
@@ -184,11 +180,10 @@ func (r *NoteRepository) UpdateNote(note *models.Note) (*models.Note, error) {
 		SET folder_id = $3,
 			title = $4,
 			note_markdown = $5,
-			transcript_text = $6,
-			enhanced_markdown = $7,
+			enhanced_markdown = $6,
 			updated_at = NOW()
 		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
-		RETURNING id, user_id, folder_id, title, note_markdown, transcript_text, enhanced_markdown, created_at, updated_at, deleted_at
+		RETURNING id, user_id, folder_id, title, note_markdown, enhanced_markdown, created_at, updated_at, deleted_at
 	`
 
 	folderID := toNullString(note.FolderID)
@@ -203,7 +198,6 @@ func (r *NoteRepository) UpdateNote(note *models.Note) (*models.Note, error) {
 		folderID,
 		note.Title,
 		note.NoteMarkdown,
-		note.TranscriptText,
 		note.EnhancedMarkdown,
 	).Scan(
 		&updated.ID,
@@ -211,7 +205,6 @@ func (r *NoteRepository) UpdateNote(note *models.Note) (*models.Note, error) {
 		&folder,
 		&updated.Title,
 		&updated.NoteMarkdown,
-		&updated.TranscriptText,
 		&updated.EnhancedMarkdown,
 		&updated.CreatedAt,
 		&updated.UpdatedAt,
@@ -249,47 +242,76 @@ func (r *NoteRepository) DeleteNote(userID, noteID string) (bool, error) {
 	return affected > 0, nil
 }
 
-func (r *NoteRepository) AppendTranscript(userID, noteID, transcript string) (*models.Note, error) {
-	if strings.TrimSpace(transcript) == "" {
-		return r.GetNoteByID(userID, noteID)
+func (r *NoteRepository) SearchNotes(userID, query string, limit, offset int) ([]models.Note, error) {
+	search := strings.TrimSpace(query)
+	if search == "" {
+		return []models.Note{}, nil
+	}
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
 	}
 
-	query := `
-		UPDATE notes
-		SET transcript_text = CASE
-			WHEN transcript_text = '' THEN $3
-			ELSE transcript_text || E'\n\n---\n\n' || $3
-		END,
-		updated_at = NOW()
-		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
-		RETURNING id, user_id, folder_id, title, note_markdown, transcript_text, enhanced_markdown, created_at, updated_at, deleted_at
+	pattern := "%" + search + "%"
+	sqlQuery := `
+		SELECT id, user_id, folder_id, title, note_markdown, enhanced_markdown, created_at, updated_at, deleted_at
+		FROM notes
+		WHERE user_id = $1
+			AND deleted_at IS NULL
+			AND (
+				title ILIKE $2
+				OR note_markdown ILIKE $2
+				OR enhanced_markdown ILIKE $2
+				OR EXISTS (
+					SELECT 1 FROM transcript_segments ts
+					JOIN transcript_speakers tsp ON tsp.id = ts.speaker_id
+					WHERE ts.note_id = notes.id AND tsp.user_id = $1 AND ts.text ILIKE $2
+				)
+			)
+		ORDER BY updated_at DESC, id DESC
+		LIMIT $3
+		OFFSET $4
 	`
 
-	var updated models.Note
-	var folder sql.NullString
-	var deleted sql.NullTime
-	err := r.db.QueryRow(query, noteID, userID, transcript).Scan(
-		&updated.ID,
-		&updated.UserID,
-		&folder,
-		&updated.Title,
-		&updated.NoteMarkdown,
-		&updated.TranscriptText,
-		&updated.EnhancedMarkdown,
-		&updated.CreatedAt,
-		&updated.UpdatedAt,
-		&deleted,
-	)
+	rows, err := r.db.Query(sqlQuery, userID, pattern, limit, offset)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("note not found")
+		return nil, fmt.Errorf("failed to search notes: %w", err)
+	}
+	defer rows.Close()
+
+	notes := []models.Note{}
+	for rows.Next() {
+		var note models.Note
+		var folder sql.NullString
+		var deleted sql.NullTime
+		if err := rows.Scan(
+			&note.ID,
+			&note.UserID,
+			&folder,
+			&note.Title,
+			&note.NoteMarkdown,
+			&note.EnhancedMarkdown,
+			&note.CreatedAt,
+			&note.UpdatedAt,
+			&deleted,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan note search row: %w", err)
 		}
-		return nil, fmt.Errorf("failed to append transcript: %w", err)
+		note.FolderID = fromNullString(folder)
+		note.DeletedAt = fromNullTime(deleted)
+		notes = append(notes, note)
 	}
 
-	updated.FolderID = fromNullString(folder)
-	updated.DeletedAt = fromNullTime(deleted)
-	return &updated, nil
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate note search rows: %w", err)
+	}
+
+	return notes, nil
 }
 
 func toNullString(value *string) sql.NullString {

@@ -5,7 +5,7 @@ import type { FolderRecord } from '@/types/folder'
 import { createFolder as createFolderApi, deleteFolder as deleteFolderApi, listFolders } from '@/lib/folders-client'
 import { createNote, deleteNote, listNotesPage } from '@/lib/notes-client'
 
-type Patch = Partial<Pick<NoteRecord, 'title' | 'folderId' | 'noteMarkdown' | 'transcriptText' | 'aiEnhancedMarkdown'>>
+type Patch = Partial<Pick<NoteRecord, 'title' | 'folderId' | 'noteMarkdown' | 'aiEnhancedMarkdown'>>
 
 type DashboardNotesContextType = {
   isLoading: boolean
@@ -23,7 +23,7 @@ type DashboardNotesContextType = {
   selected: NoteRecord | null
   search: string
   setSearch: (value: string) => void
-  selectNote: (id: string) => void
+  selectNote: (id: string | null) => void
   refresh: () => Promise<void>
   createNewNote: (payload?: { title?: string; folderId?: string | null }) => Promise<NoteRecord | null>
   deleteById: (noteId: string) => Promise<boolean>
@@ -35,7 +35,7 @@ const DashboardNotesContext = createContext<DashboardNotesContextType | null>(nu
 const UNFILED_ID = '__unfiled__'
 const PAGE_SIZE = 20
 
-function excerpt(markdown: string) {
+export function excerpt(markdown: string) {
   const text = markdown.replace(/[#*_`>[\]()-]/g, ' ').replace(/\s+/g, ' ').trim()
   if (!text) return 'No content yet.'
   return text.length > 90 ? `${text.slice(0, 90).trim()}…` : text
@@ -100,7 +100,7 @@ export function DashboardNotesProvider({
       })
       setSelectedId((current) => {
         if (current && nextNotes.some((n) => n.id === current)) return current
-        return nextNotes[0]?.id ?? null
+        return null
       })
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : 'Failed to load notes')
@@ -123,7 +123,7 @@ export function DashboardNotesProvider({
     const q = search.trim().toLowerCase()
     return notes.filter((n) => {
       if (!q) return true
-      const hay = `${n.title}\n${excerpt(n.noteMarkdown)}\n${n.transcriptText}`.toLowerCase()
+      const hay = `${n.title}\n${excerpt(n.noteMarkdown)}`.toLowerCase()
       return hay.includes(q)
     })
   }, [notes, search])
@@ -133,7 +133,7 @@ export function DashboardNotesProvider({
     [notes, selectedId],
   )
 
-  const selectNote = useCallback((id: string) => {
+  const selectNote = useCallback((id: string | null) => {
     setSelectedId(id)
   }, [])
 

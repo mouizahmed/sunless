@@ -27,6 +27,10 @@ function DashboardNoteSelector({ initialNoteId }: { initialNoteId: string | null
     if (exists) {
       selectNote(initialNoteId)
       initialAppliedRef.current = true
+      // Clear noteId from URL so a page refresh starts at home
+      const url = new URL(window.location.href)
+      url.searchParams.delete('noteId')
+      window.history.replaceState(null, '', url.toString())
     }
   }, [initialNoteId, notes, selectNote])
 

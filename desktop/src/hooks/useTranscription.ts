@@ -3,6 +3,8 @@ import { auth } from '@/config/firebase'
 import { DeepgramClient } from '@/lib/deepgram-client'
 import { startMicCapture, startSystemAudioCapture, type AudioCaptureHandle } from '@/lib/audio-capture'
 import type { LiveTranscriptSegment } from '@/types/live-insight'
+import { saveTranscriptSegments } from '@/lib/transcript-client'
+import type { TranscriptSpeakerPayload, TranscriptSegmentPayload } from '@/lib/transcript-client'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api'
 const TRANSCRIPTION_WS_URL = (() => {
@@ -14,6 +16,7 @@ const MAX_DISPLAY_SEGMENTS = 500
 const MAX_RECONNECT_ATTEMPTS = 8
 const MAX_RECONNECT_DELAY_MS = 15000
 const RECONNECT_JITTER_MS = 400
+const SEGMENT_SAVE_INTERVAL_MS = 10_000
 
 type TranscriptionStatus = 'idle' | 'connecting' | 'connected' | 'error' | 'disconnected'
 
@@ -21,6 +24,8 @@ interface UseTranscriptionOptions {
   enabled: boolean
   micMuted: boolean
   speakerMuted: boolean
+  sessionKey?: string | null
+  meetingNoteId?: string | null
   onError?: (error: Error) => void
 }
 
@@ -28,12 +33,16 @@ interface UseTranscriptionResult {
   segments: LiveTranscriptSegment[]
   status: TranscriptionStatus
   finalTranscriptText: string
+  getTranscriptSnapshot: () => string
+  flushSegments: () => Promise<void>
 }
 
 export function useTranscription({
   enabled,
   micMuted,
   speakerMuted,
+  sessionKey,
+  meetingNoteId,
   onError,
 }: UseTranscriptionOptions): UseTranscriptionResult {
   const [segments, setSegments] = useState<LiveTranscriptSegment[]>([])
@@ -46,8 +55,12 @@ export function useTranscription({
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const enabledRef = useRef(enabled)
   const finalTextRef = useRef('')
+  const lastSavedIndexRef = useRef(0)
+  const saveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const meetingNoteIdRef = useRef(meetingNoteId)
 
   enabledRef.current = enabled
+  meetingNoteIdRef.current = meetingNoteId
 
   const cleanup = useCallback(() => {
     if (reconnectTimerRef.current) {
@@ -69,6 +82,73 @@ export function useTranscription({
     }
   }, [])
 
+  const getTranscriptSnapshot = useCallback(() => {
+    if (deepgramRef.current) {
+      const live = deepgramRef.current.getTranscriptText()
+      if (live.trim()) return live
+    }
+    return finalTextRef.current
+  }, [])
+
+  const saveUnsavedSegments = useCallback(async () => {
+    const noteId = meetingNoteIdRef.current
+    if (!noteId || !deepgramRef.current) return
+
+    const allFinal = deepgramRef.current.getFinalSegments()
+    const unsaved = allFinal.slice(lastSavedIndexRef.current)
+    if (unsaved.length === 0) return
+
+    // Build unique speakers from unsaved segments
+    const speakerSet = new Map<string, TranscriptSpeakerPayload>()
+    for (const seg of unsaved) {
+      const channel = seg.channel ?? 0
+      // Derive speaker_key: channel 0 = user ("You"), channel 1 = diarized speakers
+      let speakerKey = 0
+      if (channel === 1 && seg.speakerLabel) {
+        const match = seg.speakerLabel.match(/Speaker (\d+)/)
+        speakerKey = match ? parseInt(match[1], 10) : 0
+      }
+      const key = `${speakerKey}:${channel}`
+      if (!speakerSet.has(key)) {
+        speakerSet.set(key, {
+          speaker_key: speakerKey,
+          channel,
+          label: seg.speakerLabel || seg.speaker || 'Unknown',
+        })
+      }
+    }
+
+    const speakers = Array.from(speakerSet.values())
+    const baseIndex = lastSavedIndexRef.current
+    const segmentPayloads: TranscriptSegmentPayload[] = unsaved.map((seg, i) => {
+      const channel = seg.channel ?? 0
+      let speakerKey = 0
+      if (channel === 1 && seg.speakerLabel) {
+        const match = seg.speakerLabel.match(/Speaker (\d+)/)
+        speakerKey = match ? parseInt(match[1], 10) : 0
+      }
+      return {
+        speaker_key: speakerKey,
+        channel,
+        text: seg.text,
+        start_time: seg.startTime,
+        end_time: seg.endTime,
+        segment_index: baseIndex + i,
+      }
+    })
+
+    try {
+      await saveTranscriptSegments(noteId, speakers, segmentPayloads)
+      lastSavedIndexRef.current += unsaved.length
+    } catch (err) {
+      console.error('Failed to save transcript segments:', err)
+    }
+  }, [])
+
+  const flushSegments = useCallback(async () => {
+    await saveUnsavedSegments()
+  }, [saveUnsavedSegments])
+
   const startSession = useCallback(async () => {
     cleanup()
     setStatus('connecting')
@@ -86,6 +166,7 @@ export function useTranscription({
           // Limit display segments for memory
           const display = segs.length > MAX_DISPLAY_SEGMENTS ? segs.slice(-MAX_DISPLAY_SEGMENTS) : segs
           setSegments(display)
+          finalTextRef.current = deepgramRef.current?.getTranscriptText() ?? finalTextRef.current
         },
         onError: (err) => {
           console.error('Deepgram error:', err)
@@ -148,6 +229,28 @@ export function useTranscription({
     }
   }, [cleanup, micMuted, speakerMuted, onError])
 
+  useEffect(() => {
+    finalTextRef.current = ''
+    setSegments([])
+    lastSavedIndexRef.current = 0
+  }, [sessionKey])
+
+  // Incremental segment save interval
+  useEffect(() => {
+    if (enabled && meetingNoteId) {
+      saveTimerRef.current = setInterval(() => {
+        void saveUnsavedSegments()
+      }, SEGMENT_SAVE_INTERVAL_MS)
+    }
+
+    return () => {
+      if (saveTimerRef.current) {
+        clearInterval(saveTimerRef.current)
+        saveTimerRef.current = null
+      }
+    }
+  }, [enabled, meetingNoteId, saveUnsavedSegments])
+
   // Start/stop based on enabled
   useEffect(() => {
     if (enabled) {
@@ -201,5 +304,7 @@ export function useTranscription({
     segments,
     status,
     finalTranscriptText: finalTextRef.current,
+    getTranscriptSnapshot,
+    flushSegments,
   }
 }

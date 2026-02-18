@@ -75,8 +75,8 @@ export default function DashboardSidebar() {
           <NavButton
             icon={Home}
             label="Home"
-            onClick={() => selectFolder(null)}
-            isActive={selectedFolderId === null}
+            onClick={() => { selectFolder(null); selectNote(null) }}
+            isActive={selectedId === null}
           />
           <NavButton
             icon={FileText}

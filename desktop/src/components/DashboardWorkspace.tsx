@@ -10,11 +10,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import Response from '@/components/ui/shadcn-io/ai/response'
+import { InfoBanner } from '@/components/ui/info-banner'
 import { auth } from '@/config/firebase'
 import { updateNote } from '@/lib/notes-client'
+import { getTranscriptSegments, type TranscriptSpeaker, type TranscriptSegment } from '@/lib/transcript-client'
+import SavedTranscriptView from '@/components/SavedTranscriptView'
 import MarkdownEditor from '@/components/MarkdownEditor'
+import DashboardHome from '@/components/DashboardHome'
 import { useDashboardNotes } from '@/contexts/DashboardNotesContext'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api'
@@ -24,7 +27,7 @@ type DashboardWorkspaceProps = {
   userId?: string
 }
 
-async function enhanceNote(params: { title: string; noteMarkdown: string; transcriptText: string }) {
+async function enhanceNote(params: { title: string; noteMarkdown: string }) {
   const currentUser = auth.currentUser
   if (!currentUser) throw new Error('Not authenticated')
   const idToken = await currentUser.getIdToken()
@@ -39,7 +42,6 @@ async function enhanceNote(params: { title: string; noteMarkdown: string; transc
     body: JSON.stringify({
       title: params.title,
       note_markdown: params.noteMarkdown,
-      transcript_text: params.transcriptText,
     }),
   })
 
@@ -60,20 +62,28 @@ async function enhanceNote(params: { title: string; noteMarkdown: string; transc
 
 export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) {
   const { folders, selectedId, selected, deleteById, optimisticPatch, replaceNote } = useDashboardNotes()
-  const [tab, setTab] = useState<'original' | 'transcript' | 'enhanced'>('original')
+  const [tab, setTab] = useState<'original' | 'enhanced'>('original')
+  const [transcriptOpen, setTranscriptOpen] = useState(false)
 
   const [draftTitle, setDraftTitle] = useState('')
+  const [editingTitle, setEditingTitle] = useState(false)
+  const titleInputRef = useRef<HTMLInputElement>(null)
   const [draftFolderId, setDraftFolderId] = useState('')
   const [draftNote, setDraftNote] = useState('')
-  const [draftTranscript, setDraftTranscript] = useState('')
   const [draftEnhanced, setDraftEnhanced] = useState('')
 
   const [isEnhancing, setIsEnhancing] = useState(false)
   const [enhanceError, setEnhanceError] = useState<string | null>(null)
 
+  const [transcriptSpeakers, setTranscriptSpeakers] = useState<TranscriptSpeaker[]>([])
+  const [transcriptSegments, setTranscriptSegments] = useState<TranscriptSegment[]>([])
+  const [transcriptLoading, setTranscriptLoading] = useState(false)
+  const transcriptLoadedForRef = useRef<string | null>(null)
+
   const saveTimerRef = useRef<number | null>(null)
   const lastLoadedIdRef = useRef<string | null>(null)
   const isHydratingDraftsRef = useRef(false)
+  const transcriptMenuRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     if (!selected) {
@@ -82,9 +92,9 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
       setDraftTitle('')
       setDraftFolderId('')
       setDraftNote('')
-      setDraftTranscript('')
       setDraftEnhanced('')
       setTab('original')
+      setTranscriptOpen(false)
       return
     }
     if (lastLoadedIdRef.current === selected.id) return
@@ -94,22 +104,71 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
     setDraftTitle(selected.title)
     setDraftFolderId(selected.folderId ?? '')
     setDraftNote(selected.noteMarkdown)
-    setDraftTranscript(selected.transcriptText)
     setDraftEnhanced(selected.aiEnhancedMarkdown)
     setEnhanceError(null)
 
-    // If enhanced doesn't exist on this note, keep user on original/transcript.
+    // If enhanced doesn't exist on this note, keep user on original.
     if (!selected.aiEnhancedMarkdown?.trim() && tab === 'enhanced') {
       setTab('original')
     }
   }, [selected, tab])
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!transcriptMenuRef.current) return
+      if (!transcriptMenuRef.current.contains(event.target as Node)) {
+        setTranscriptOpen(false)
+      }
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setTranscriptOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!transcriptOpen || !selectedId) return
+    if (transcriptLoadedForRef.current === selectedId) return
+    transcriptLoadedForRef.current = selectedId
+    setTranscriptLoading(true)
+    void getTranscriptSegments(selectedId)
+      .then(({ speakers, segments }) => {
+        setTranscriptSpeakers(speakers)
+        setTranscriptSegments(segments)
+      })
+      .catch(() => {
+        setTranscriptSpeakers([])
+        setTranscriptSegments([])
+      })
+      .finally(() => setTranscriptLoading(false))
+  }, [transcriptOpen, selectedId])
+
+  // Reset transcript cache when note changes
+  useEffect(() => {
+    transcriptLoadedForRef.current = null
+    setTranscriptSegments([])
+    setTranscriptSpeakers([])
+  }, [selectedId])
+
+  const handleSpeakerUpdated = useCallback((speakerId: string, updates: { label?: string; color?: string }) => {
+    setTranscriptSpeakers((prev) =>
+      prev.map((s) => (s.id === speakerId ? { ...s, ...updates } : s)),
+    )
+  }, [])
 
   const scheduleSave = useCallback(
     (patch: {
       title: string
       folderId?: string
       noteMarkdown: string
-      transcriptText: string
       aiEnhancedMarkdown: string
     }) => {
       if (!selectedId) return
@@ -141,10 +200,9 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
       title: draftTitle,
       folderId: draftFolderId || '',
       noteMarkdown: draftNote,
-      transcriptText: draftTranscript,
       aiEnhancedMarkdown: draftEnhanced,
     })
-  }, [draftTitle, draftFolderId, draftNote, draftTranscript, draftEnhanced, scheduleSave, selectedId])
+  }, [draftTitle, draftFolderId, draftNote, draftEnhanced, scheduleSave, selectedId])
 
   const handleDelete = useCallback(async () => {
     if (!selectedId) return
@@ -159,7 +217,6 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
       const enhanced = await enhanceNote({
         title: draftTitle,
         noteMarkdown: draftNote,
-        transcriptText: draftTranscript,
       })
       setDraftEnhanced(enhanced)
       await updateNote(userId, selectedId, { aiEnhancedMarkdown: enhanced })
@@ -170,19 +227,48 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
     } finally {
       setIsEnhancing(false)
     }
-  }, [draftNote, draftTitle, draftTranscript, optimisticPatch, selectedId, userId])
+  }, [draftNote, draftTitle, optimisticPatch, selectedId, userId])
+
+  if (!selectedId) {
+    return (
+      <div className="h-full">
+        <DashboardHome />
+      </div>
+    )
+  }
 
   return (
     <div className="h-full">
       <div className="relative flex h-full min-h-0 flex-col rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
         <div className="flex items-center gap-2 border-b border-neutral-200 px-2.5 py-2 dark:border-neutral-800">
-          <Input
-            value={draftTitle}
-            onChange={(e) => setDraftTitle(e.target.value)}
-            placeholder="Title…"
-            className="h-9 border-neutral-200 bg-neutral-50 text-neutral-900 placeholder:text-neutral-400 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-50 dark:placeholder:text-neutral-500"
-            disabled={!selectedId}
-          />
+          {editingTitle ? (
+            <Input
+              ref={titleInputRef}
+              value={draftTitle}
+              onChange={(e) => setDraftTitle(e.target.value)}
+              onBlur={() => setEditingTitle(false)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === 'Escape') {
+                  e.preventDefault()
+                  setEditingTitle(false)
+                }
+              }}
+              placeholder="Title…"
+              className="h-9 border-neutral-200 bg-neutral-50 text-neutral-900 placeholder:text-neutral-400 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-50 dark:placeholder:text-neutral-500"
+            />
+          ) : (
+            <button
+              type="button"
+              disabled={!selectedId}
+              onClick={() => {
+                setEditingTitle(true)
+                setTimeout(() => titleInputRef.current?.select(), 0)
+              }}
+              className="h-9 min-w-0 flex-1 truncate rounded-md px-3 text-left text-sm font-medium text-neutral-900 transition-colors hover:bg-neutral-100 dark:text-neutral-50 dark:hover:bg-neutral-800"
+            >
+              {draftTitle || 'Untitled note'}
+            </button>
+          )}
           <Select
             value={draftFolderId ? draftFolderId : UNFILED_VALUE}
             onValueChange={(v) => setDraftFolderId(v === UNFILED_VALUE ? '' : v)}
@@ -203,21 +289,53 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
               ))}
             </SelectContent>
           </Select>
-          <Tabs value={tab} onValueChange={(v) => setTab(v as 'original' | 'transcript' | 'enhanced')}>
-            <TabsList className="h-9 rounded-md bg-neutral-100 p-1 dark:bg-neutral-950">
-              <TabsTrigger value="original" className="h-7 rounded-md px-3 text-xs">
-                Original
-              </TabsTrigger>
-              <TabsTrigger value="transcript" className="h-7 rounded-md px-3 text-xs">
+          <div className="flex items-center gap-1 rounded-md bg-neutral-100 p-1 dark:bg-neutral-950">
+            <div ref={transcriptMenuRef} className="relative">
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-7 rounded-md px-3 text-xs"
+                onClick={() => setTranscriptOpen((open) => !open)}
+                style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}
+              >
                 Transcript
-              </TabsTrigger>
-              {draftEnhanced.trim() ? (
-                <TabsTrigger value="enhanced" className="h-7 rounded-md px-3 text-xs">
-                  Enhanced
-                </TabsTrigger>
+              </Button>
+
+                {selectedId && transcriptOpen ? (
+                <div
+                  className="absolute right-0 top-[calc(100%+8px)] z-30 w-[420px] rounded-lg border border-neutral-200 bg-white shadow-xl dark:border-neutral-800 dark:bg-neutral-900"
+                  style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}
+                >
+                  <div className="border-b border-neutral-200 px-3 py-2 text-xs font-medium text-neutral-600 dark:border-neutral-800 dark:text-neutral-300">
+                    Transcript
+                  </div>
+                  <InfoBanner className="rounded-none border-0 border-b border-violet-400/40">
+                    The transcript may show repeated sentences without headphones, but your final notes will be unaffected. For the best experience, use headphones.
+                  </InfoBanner>
+                  <div className="h-44 w-full overflow-y-auto p-2.5 text-sm text-neutral-900 dark:text-neutral-50">
+                    <SavedTranscriptView
+                      speakers={transcriptSpeakers}
+                      segments={transcriptSegments}
+                      loading={transcriptLoading}
+                      onSpeakerUpdated={handleSpeakerUpdated}
+                      theme="light"
+                    />
+                  </div>
+                </div>
               ) : null}
-            </TabsList>
-          </Tabs>
+            </div>
+            {draftEnhanced.trim() ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className={`h-7 rounded-md px-3 text-xs ${tab === 'enhanced' ? 'bg-white dark:bg-neutral-800' : ''}`}
+                onClick={() => setTab((current) => (current === 'enhanced' ? 'original' : 'enhanced'))}
+                style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}
+              >
+                Enhanced
+              </Button>
+            ) : null}
+          </div>
           <Button
             type="button"
             size="icon"
@@ -238,11 +356,7 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
         ) : null}
 
         <div className="flex-1 min-h-0 overflow-hidden">
-          {!selectedId ? (
-            <div className="flex h-full items-center justify-center p-6 text-sm text-neutral-500 dark:text-neutral-400">
-              Select a note from the sidebar.
-            </div>
-          ) : tab === 'original' ? (
+          {tab === 'original' ? (
             <MarkdownEditor
               markdown={draftNote}
               onChange={setDraftNote}
@@ -251,13 +365,6 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
               showToolbar
               className="h-full dashboard-editor"
               noteId={selectedId}
-            />
-          ) : tab === 'transcript' ? (
-            <textarea
-              value={draftTranscript}
-              onChange={(e) => setDraftTranscript(e.target.value)}
-              placeholder="Transcript…"
-              className="h-full w-full resize-none bg-transparent p-2.5 text-sm text-neutral-900 outline-none dark:text-neutral-50"
             />
           ) : (
             <div className="h-full overflow-y-auto p-2.5 sidebar-scrollbar">
@@ -273,7 +380,7 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
 
         </div>
 
-        {selectedId && (tab === 'original' || tab === 'transcript') ? (
+        {selectedId && tab === 'original' ? (
           <div className="pointer-events-none absolute bottom-2.5 left-1/2 z-20 -translate-x-1/2">
             <Button
               type="button"
@@ -290,6 +397,7 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
             </Button>
           </div>
         ) : null}
+
       </div>
     </div>
   )

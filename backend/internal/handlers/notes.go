@@ -29,7 +29,6 @@ type CreateNoteRequest struct {
 	Title            *string `json:"title"`
 	FolderID         *string `json:"folder_id"`
 	NoteMarkdown     *string `json:"note_markdown"`
-	TranscriptText   *string `json:"transcript_text"`
 	EnhancedMarkdown *string `json:"enhanced_markdown"`
 }
 
@@ -37,12 +36,30 @@ type UpdateNoteRequest struct {
 	Title            *string `json:"title"`
 	FolderID         *string `json:"folder_id"`
 	NoteMarkdown     *string `json:"note_markdown"`
-	TranscriptText   *string `json:"transcript_text"`
 	EnhancedMarkdown *string `json:"enhanced_markdown"`
 }
 
 type StopRecordingRequest struct {
 	FinalTranscript *string `json:"final_transcript"`
+}
+
+type SearchResponse struct {
+	Query      string          `json:"query"`
+	Notes      []models.Note   `json:"notes"`
+	Folders    []models.Folder `json:"folders"`
+	Pagination SearchPageMeta  `json:"pagination"`
+}
+
+type SearchPageMeta struct {
+	Limit   int               `json:"limit"`
+	Notes   SearchSectionMeta `json:"notes"`
+	Folders SearchSectionMeta `json:"folders"`
+}
+
+type SearchSectionMeta struct {
+	Offset     int  `json:"offset"`
+	NextOffset int  `json:"next_offset"`
+	HasMore    bool `json:"has_more"`
 }
 
 func NewNotesHandler(noteRepo *repository.NoteRepository, folderRepo *repository.FolderRepository, recordingRepo *repository.RecordingSessionRepository, b2Client *storage.B2Client, attachmentRepo *repository.NoteAttachmentRepository) *NotesHandler {
@@ -152,6 +169,134 @@ func (h *NotesHandler) ListNotes(c *gin.Context) {
 	})
 }
 
+func (h *NotesHandler) Search(c *gin.Context) {
+	userID, err := getUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	query := strings.TrimSpace(c.Query("q"))
+	if query == "" {
+		c.JSON(http.StatusOK, SearchResponse{
+			Query:   "",
+			Notes:   []models.Note{},
+			Folders: []models.Folder{},
+			Pagination: SearchPageMeta{
+				Limit:   limitDefault(),
+				Notes:   SearchSectionMeta{Offset: 0, NextOffset: 0, HasMore: false},
+				Folders: SearchSectionMeta{Offset: 0, NextOffset: 0, HasMore: false},
+			},
+		})
+		return
+	}
+
+	limit := limitDefault()
+	if raw := strings.TrimSpace(c.Query("limit")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid limit parameter"})
+			return
+		}
+		limit = parsed
+	}
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	noteLimit := limit
+	if raw := strings.TrimSpace(c.Query("note_limit")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 0 || parsed > 100 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid note_limit parameter"})
+			return
+		}
+		noteLimit = parsed
+	}
+	folderLimit := limit
+	if raw := strings.TrimSpace(c.Query("folder_limit")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 0 || parsed > 100 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid folder_limit parameter"})
+			return
+		}
+		folderLimit = parsed
+	}
+
+	noteOffset := 0
+	if raw := strings.TrimSpace(c.Query("note_offset")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid note_offset parameter"})
+			return
+		}
+		noteOffset = parsed
+	}
+
+	folderOffset := 0
+	if raw := strings.TrimSpace(c.Query("folder_offset")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid folder_offset parameter"})
+			return
+		}
+		folderOffset = parsed
+	}
+
+	notes := []models.Note{}
+	notesHasMore := false
+	if noteLimit > 0 {
+		notesWithExtra, err := h.noteRepo.SearchNotes(userID, query, noteLimit+1, noteOffset)
+		if err != nil {
+			log.Printf("search: failed to search notes for user %s: %v", userID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to run search"})
+			return
+		}
+		notesHasMore = len(notesWithExtra) > noteLimit
+		notes = notesWithExtra
+		if notesHasMore {
+			notes = notesWithExtra[:noteLimit]
+		}
+	}
+
+	folders := []models.Folder{}
+	foldersHasMore := false
+	if folderLimit > 0 {
+		foldersWithExtra, err := h.folderRepo.SearchFolders(userID, query, folderLimit+1, folderOffset)
+		if err != nil {
+			log.Printf("search: failed to search folders for user %s: %v", userID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to run search"})
+			return
+		}
+		foldersHasMore = len(foldersWithExtra) > folderLimit
+		folders = foldersWithExtra
+		if foldersHasMore {
+			folders = foldersWithExtra[:folderLimit]
+		}
+	}
+
+	c.JSON(http.StatusOK, SearchResponse{
+		Query:   query,
+		Notes:   notes,
+		Folders: folders,
+		Pagination: SearchPageMeta{
+			Limit: limit,
+			Notes: SearchSectionMeta{
+				Offset: noteOffset, NextOffset: noteOffset + len(notes), HasMore: notesHasMore,
+			},
+			Folders: SearchSectionMeta{
+				Offset: folderOffset, NextOffset: folderOffset + len(folders), HasMore: foldersHasMore,
+			},
+		},
+	})
+}
+
+func limitDefault() int {
+	return 10
+}
+
 func (h *NotesHandler) GetNote(c *gin.Context) {
 	userID, err := getUserID(c)
 	if err != nil {
@@ -199,7 +344,6 @@ func (h *NotesHandler) CreateNote(c *gin.Context) {
 		FolderID:         req.FolderID,
 		Title:            title,
 		NoteMarkdown:     derefString(req.NoteMarkdown),
-		TranscriptText:   derefString(req.TranscriptText),
 		EnhancedMarkdown: derefString(req.EnhancedMarkdown),
 	}
 
@@ -243,7 +387,7 @@ func (h *NotesHandler) UpdateNote(c *gin.Context) {
 		return
 	}
 
-	if req.Title == nil && req.FolderID == nil && req.NoteMarkdown == nil && req.TranscriptText == nil && req.EnhancedMarkdown == nil {
+	if req.Title == nil && req.FolderID == nil && req.NoteMarkdown == nil && req.EnhancedMarkdown == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "no fields to update"})
 		return
 	}
@@ -276,9 +420,6 @@ func (h *NotesHandler) UpdateNote(c *gin.Context) {
 	}
 	if req.NoteMarkdown != nil {
 		existing.NoteMarkdown = *req.NoteMarkdown
-	}
-	if req.TranscriptText != nil {
-		existing.TranscriptText = *req.TranscriptText
 	}
 	if req.EnhancedMarkdown != nil {
 		existing.EnhancedMarkdown = *req.EnhancedMarkdown
@@ -395,22 +536,8 @@ func (h *NotesHandler) StopRecording(c *gin.Context) {
 		return
 	}
 
-	finalTranscript := ""
-	if req.FinalTranscript != nil {
-		finalTranscript = strings.TrimSpace(*req.FinalTranscript)
-	}
-
-	updated, err := h.noteRepo.AppendTranscript(userID, noteID, finalTranscript)
-	if err != nil {
-		log.Printf("recording: failed to append transcript: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to stop recording"})
-		return
-	}
-
 	c.JSON(http.StatusOK, gin.H{
-		"session":          session,
-		"updated_note":     updated,
-		"transcript_added": finalTranscript != "",
+		"session": session,
 	})
 }
 
@@ -562,4 +689,3 @@ func (h *NotesHandler) DeleteImage(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
-

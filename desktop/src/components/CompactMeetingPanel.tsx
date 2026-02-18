@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
+import { InfoBanner } from '@/components/ui/info-banner'
 import MarkdownEditor from '@/components/MarkdownEditor'
 import TranscriptPanel from '@/components/TranscriptPanel'
 import { getNote, updateNote } from '@/lib/notes-client'
@@ -11,6 +12,8 @@ import type { NoteRecord } from '@/types/note'
 import type { LiveTranscriptSegment } from '@/types/live-insight'
 
 type TranscriptionStatus = 'idle' | 'connecting' | 'connected' | 'error' | 'disconnected'
+const TRANSCRIPT_WARNING_TEXT =
+  'The transcript may show repeated sentences without headphones, but your final notes will be unaffected. For the best experience, use headphones.'
 
 type CompactMeetingPanelProps = {
   noteId: string
@@ -38,7 +41,6 @@ export default function CompactMeetingPanel({
   const [tab, setTab] = useState<'original' | 'transcript'>('original')
   const [draftTitle, setDraftTitle] = useState('')
   const [draftNote, setDraftNote] = useState('')
-  const [draftTranscript, setDraftTranscript] = useState('')
 
   const saveTimerRef = useRef<number | null>(null)
   const lastLoadedIdRef = useRef<string | null>(null)
@@ -71,11 +73,10 @@ export default function CompactMeetingPanel({
     isHydratingDraftsRef.current = true
     setDraftTitle(note.title)
     setDraftNote(note.noteMarkdown)
-    setDraftTranscript(note.transcriptText)
   }, [note])
 
   const scheduleSave = useCallback(
-    (patch: { title: string; noteMarkdown: string; transcriptText: string }) => {
+    (patch: { title: string; noteMarkdown: string }) => {
       if (!noteId) return
       if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
 
@@ -97,9 +98,8 @@ export default function CompactMeetingPanel({
     scheduleSave({
       title: draftTitle,
       noteMarkdown: draftNote,
-      transcriptText: draftTranscript,
     })
-  }, [draftTitle, draftNote, draftTranscript, noteId, scheduleSave])
+  }, [draftTitle, draftNote, noteId, scheduleSave])
 
   const content = useMemo(() => {
     if (isLoading) {
@@ -182,14 +182,17 @@ export default function CompactMeetingPanel({
                   appearance="embedded"
                   className="min-h-[220px]"
                 />
-              ) : draftTranscript ? (
-                <p className="whitespace-pre-wrap">{draftTranscript}</p>
               ) : (
-                <p className="text-white/45">
-                  {transcriptionMode === 'notes_only'
-                    ? 'Transcript is paused. Continue taking notes.'
-                    : 'Transcript text will appear here.'}
-                </p>
+                <>
+                  <InfoBanner className="mb-2">
+                    {TRANSCRIPT_WARNING_TEXT}
+                  </InfoBanner>
+                  <p className="text-white/45">
+                    {transcriptionMode === 'notes_only'
+                      ? 'Transcript is paused. Continue taking notes.'
+                      : 'Transcript text will appear here.'}
+                  </p>
+                </>
               )}
             </div>
           )}
@@ -200,7 +203,6 @@ export default function CompactMeetingPanel({
   }, [
     draftNote,
     draftTitle,
-    draftTranscript,
     error,
     isLoading,
     noteId,

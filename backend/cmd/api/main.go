@@ -54,6 +54,7 @@ func main() {
 	folderRepo := repository.NewFolderRepository(db)
 	recordingRepo := repository.NewRecordingSessionRepository(db)
 	noteAttachmentRepo := repository.NewNoteAttachmentRepository(db)
+	transcriptRepo := repository.NewTranscriptRepository(db)
 
 	// Initialize direct Redis client for OAuth codes
 	redisClient := redis.NewClient(&redis.Options{
@@ -80,6 +81,8 @@ func main() {
 	notesHandler := handlers.NewNotesHandler(noteRepo, folderRepo, recordingRepo, b2Client, noteAttachmentRepo)
 
 	transcriptionHandler := handlers.NewTranscriptionHandler()
+	transcriptHandler := handlers.NewTranscriptHandler(transcriptRepo, noteRepo)
+	calendarHandler := handlers.NewCalendarHandler(oauthTokenRepo)
 
 	// Initialize the router
 	router := gin.Default()
@@ -122,6 +125,7 @@ func main() {
 		authenticated.GET("/user/me", userHandler.GetCurrentUser)
 
 		// Notes routes
+		authenticated.GET("/search", notesHandler.Search)
 		authenticated.GET("/notes", notesHandler.ListNotes)
 		authenticated.GET("/notes/:noteID", notesHandler.GetNote)
 		authenticated.POST("/notes", notesHandler.CreateNote)
@@ -138,6 +142,15 @@ func main() {
 		authenticated.POST("/folders", folderHandler.CreateFolder)
 		authenticated.PATCH("/folders/:folderID", folderHandler.RenameFolder)
 		authenticated.DELETE("/folders/:folderID", folderHandler.DeleteFolder)
+
+		// Transcript routes
+		authenticated.POST("/notes/:noteID/transcript/segments", transcriptHandler.SaveSegments)
+		authenticated.GET("/notes/:noteID/transcript/segments", transcriptHandler.GetSegments)
+		authenticated.PATCH("/transcript/speakers/:speakerID", transcriptHandler.UpdateSpeaker)
+		authenticated.GET("/transcript/search", transcriptHandler.SearchSegments)
+
+		// Calendar routes
+		authenticated.GET("/calendar/upcoming", calendarHandler.GetUpcomingEvents)
 	}
 
 	// Start the server

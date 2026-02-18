@@ -9,7 +9,6 @@ type ApiNote = {
   folder_id?: string | null
   title: string
   note_markdown: string
-  transcript_text: string
   enhanced_markdown: string
   created_at: string
   updated_at: string
@@ -21,7 +20,6 @@ function toNoteRecord(note: ApiNote): NoteRecord {
     title: note.title,
     folderId: note.folder_id ?? undefined,
     noteMarkdown: note.note_markdown ?? '',
-    transcriptText: note.transcript_text ?? '',
     aiEnhancedMarkdown: note.enhanced_markdown ?? '',
     createdAt: Date.parse(note.created_at),
     updatedAt: Date.parse(note.updated_at),
@@ -102,7 +100,7 @@ export async function getNote(userId: string | undefined, noteId: string): Promi
 
 export async function createNote(
   userId?: string,
-  initial?: { id?: string; title?: string; folderId?: string | null; noteMarkdown?: string; transcriptText?: string },
+  initial?: { id?: string; title?: string; folderId?: string | null; noteMarkdown?: string },
 ): Promise<NoteRecord> {
   void userId
   const idToken = await getIdToken()
@@ -117,7 +115,6 @@ export async function createNote(
       title: initial?.title,
       folder_id: initial?.folderId ?? null,
       note_markdown: initial?.noteMarkdown,
-      transcript_text: initial?.transcriptText,
     }),
   })
   if (!payload.note) {
@@ -129,7 +126,7 @@ export async function createNote(
 export async function updateNote(
   userId: string | undefined,
   noteId: string,
-  patch: { title?: string; folderId?: string | null; noteMarkdown?: string; transcriptText?: string; aiEnhancedMarkdown?: string },
+  patch: { title?: string; folderId?: string | null; noteMarkdown?: string; aiEnhancedMarkdown?: string },
 ): Promise<NoteRecord | null> {
   void userId
   const idToken = await getIdToken()
@@ -144,7 +141,6 @@ export async function updateNote(
       title: patch.title,
       folder_id: patch.folderId,
       note_markdown: patch.noteMarkdown,
-      transcript_text: patch.transcriptText,
       enhanced_markdown: patch.aiEnhancedMarkdown,
     }),
   })

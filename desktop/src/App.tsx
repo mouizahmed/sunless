@@ -52,10 +52,12 @@ function AppContent() {
     return /(quota|limit|minute|credit|billing|insufficient|exceed)/.test(text)
   }
 
-  const { segments: transcriptSegments, status: transcriptStatus, finalTranscriptText } = useTranscription({
+  const { segments: transcriptSegments, status: transcriptStatus, getTranscriptSnapshot, flushSegments } = useTranscription({
     enabled: meetingActive && transcriptionEnabled,
     micMuted,
     speakerMuted,
+    sessionKey: meetingNoteId,
+    meetingNoteId,
     onError: (err) => {
       if (isQuotaError(err)) {
         setTranscriptionEnabled(false)
@@ -214,9 +216,17 @@ function AppContent() {
   }
 
   const endMeeting = async () => {
+    // Flush any unsaved structured transcript segments before cleanup
+    try {
+      await flushSegments()
+    } catch (error) {
+      console.error('Failed to flush transcript segments', error)
+    }
+
+    const transcriptToSave = getTranscriptSnapshot()
     if (meetingNoteId && meetingSessionId) {
       try {
-        await stopRecording(meetingNoteId, meetingSessionId, finalTranscriptText)
+        await stopRecording(meetingNoteId, meetingSessionId, transcriptToSave)
       } catch (error) {
         console.error('Failed to stop recording session', error)
       }
@@ -285,10 +295,10 @@ function AppContent() {
     window.dashboard?.open?.()
   }
 
-  const handleConfirmOpenDashboard = () => {
+  const handleConfirmOpenDashboard = async () => {
     setShowDashboardConfirm(false)
     const noteId = meetingNoteId
-    void endMeeting()
+    await endMeeting()
     window.dashboard?.open?.(noteId ?? undefined)
   }
 

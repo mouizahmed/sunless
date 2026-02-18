@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 
 import type { LiveTranscriptSegment } from '@/types/live-insight'
 import { cn } from '@/lib/utils'
+import { InfoBanner } from '@/components/ui/info-banner'
 
 type TranscriptPanelProps = {
   segments: LiveTranscriptSegment[]
@@ -16,6 +17,9 @@ const KNOWN_SPEAKER_LABELS: Record<string, string> = {
   assistant: 'Sunless',
   system: 'System',
 }
+
+const TRANSCRIPT_WARNING_TEXT =
+  'The transcript may show repeated sentences without headphones, but your final notes will be unaffected. For the best experience, use headphones.'
 
 function getSpeakerLabel(segment: LiveTranscriptSegment): string {
   if (segment.speakerLabel) return segment.speakerLabel
@@ -102,6 +106,9 @@ export default function TranscriptPanel({
 
   return (
     <div className={cn(containerClassName, className)}>
+      <InfoBanner>
+        {TRANSCRIPT_WARNING_TEXT}
+      </InfoBanner>
       {content ? (
         <div className="rounded-2xl border border-dashed border-white/15 bg-white/15 px-4 py-6 text-sm text-white/70">
           {content}

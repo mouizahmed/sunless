@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/mouizahmed/justscribe-backend/internal/database"
 	"github.com/mouizahmed/justscribe-backend/internal/models"
@@ -151,4 +152,65 @@ func (r *FolderRepository) DeleteFolder(userID, folderID string) (bool, error) {
 		return false, fmt.Errorf("failed to delete folder: %w", err)
 	}
 	return affected > 0, nil
+}
+
+func (r *FolderRepository) SearchFolders(userID, query string, limit, offset int) ([]models.Folder, error) {
+	search := strings.TrimSpace(query)
+	if search == "" {
+		return []models.Folder{}, nil
+	}
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	pattern := "%" + search + "%"
+	sqlQuery := `
+		SELECT id, user_id, name, parent_id, created_at, updated_at, deleted_at
+		FROM folders
+		WHERE user_id = $1
+			AND deleted_at IS NULL
+			AND name ILIKE $2
+		ORDER BY name ASC, id ASC
+		LIMIT $3
+		OFFSET $4
+	`
+
+	rows, err := r.db.Query(sqlQuery, userID, pattern, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search folders: %w", err)
+	}
+	defer rows.Close()
+
+	folders := []models.Folder{}
+	for rows.Next() {
+		var folder models.Folder
+		var parent sql.NullString
+		var deleted sql.NullTime
+		if err := rows.Scan(
+			&folder.ID,
+			&folder.UserID,
+			&folder.Name,
+			&parent,
+			&folder.CreatedAt,
+			&folder.UpdatedAt,
+			&deleted,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan folder search row: %w", err)
+		}
+		folder.ParentID = fromNullString(parent)
+		folder.DeletedAt = fromNullTime(deleted)
+		folders = append(folders, folder)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate folder search rows: %w", err)
+	}
+
+	return folders, nil
 }
