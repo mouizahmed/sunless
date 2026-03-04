@@ -10,6 +10,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"github.com/mouizahmed/justscribe-backend/internal/ai"
 	"github.com/mouizahmed/justscribe-backend/internal/auth"
 	"github.com/mouizahmed/justscribe-backend/internal/database"
 	"github.com/mouizahmed/justscribe-backend/internal/handlers"
@@ -51,10 +52,17 @@ func main() {
 	userRepo := repository.NewUserRepository(db)
 	oauthTokenRepo := repository.NewOAuthTokenRepository(db)
 	noteRepo := repository.NewNoteRepository(db)
+	noteVersionRepo := repository.NewNoteVersionRepository(db)
 	folderRepo := repository.NewFolderRepository(db)
 	recordingRepo := repository.NewRecordingSessionRepository(db)
 	noteAttachmentRepo := repository.NewNoteAttachmentRepository(db)
 	transcriptRepo := repository.NewTranscriptRepository(db)
+	conversationRepo := repository.NewConversationRepository(db)
+	messageRepo := repository.NewMessageRepository(db)
+
+	// Initialize AI services
+	aiClient := ai.NewClient()
+	toolExecutor := ai.NewToolExecutor(noteRepo, transcriptRepo, folderRepo, db)
 
 	// Initialize direct Redis client for OAuth codes
 	redisClient := redis.NewClient(&redis.Options{
@@ -78,11 +86,13 @@ func main() {
 		log.Fatalf("Failed to initialize B2 client: %v", err)
 	}
 
-	notesHandler := handlers.NewNotesHandler(noteRepo, folderRepo, recordingRepo, b2Client, noteAttachmentRepo)
+	notesHandler := handlers.NewNotesHandler(noteRepo, noteVersionRepo, folderRepo, recordingRepo, b2Client, noteAttachmentRepo, aiClient)
 
 	transcriptionHandler := handlers.NewTranscriptionHandler()
 	transcriptHandler := handlers.NewTranscriptHandler(transcriptRepo, noteRepo)
 	calendarHandler := handlers.NewCalendarHandler(oauthTokenRepo)
+	chatHandler := handlers.NewChatHandler(conversationRepo, messageRepo, aiClient, toolExecutor)
+	aiTransformHandler := handlers.NewAITransformHandler(aiClient)
 
 	// Initialize the router
 	router := gin.Default()
@@ -131,7 +141,10 @@ func main() {
 		authenticated.POST("/notes", notesHandler.CreateNote)
 		authenticated.PATCH("/notes/:noteID", notesHandler.UpdateNote)
 		authenticated.DELETE("/notes/:noteID", notesHandler.DeleteNote)
-		authenticated.POST("/notes/enhance", notesHandler.EnhanceNote)
+		authenticated.POST("/notes/:noteID/enhance", notesHandler.EnhanceNote)
+		authenticated.POST("/notes/:noteID/overview", notesHandler.GenerateOverview)
+		authenticated.GET("/notes/:noteID/versions", notesHandler.ListVersions)
+		authenticated.POST("/notes/:noteID/revert/:versionID", notesHandler.RevertToVersion)
 		authenticated.POST("/notes/:noteID/images", notesHandler.UploadImage)
 		authenticated.DELETE("/notes/:noteID/images/:imageID", notesHandler.DeleteImage)
 		authenticated.POST("/notes/:noteID/recording/start", notesHandler.StartRecording)
@@ -146,11 +159,22 @@ func main() {
 		// Transcript routes
 		authenticated.POST("/notes/:noteID/transcript/segments", transcriptHandler.SaveSegments)
 		authenticated.GET("/notes/:noteID/transcript/segments", transcriptHandler.GetSegments)
-		authenticated.PATCH("/transcript/speakers/:speakerID", transcriptHandler.UpdateSpeaker)
 		authenticated.GET("/transcript/search", transcriptHandler.SearchSegments)
 
 		// Calendar routes
 		authenticated.GET("/calendar/upcoming", calendarHandler.GetUpcomingEvents)
+
+		// Chat routes
+		authenticated.POST("/chat/conversations", chatHandler.CreateConversation)
+		authenticated.GET("/chat/conversations", chatHandler.ListConversations)
+		authenticated.DELETE("/chat/conversations/:conversationID", chatHandler.DeleteConversation)
+		authenticated.PATCH("/chat/conversations/:conversationID", chatHandler.RenameConversation)
+		authenticated.GET("/chat/conversations/:conversationID/messages", chatHandler.GetMessages)
+		authenticated.POST("/chat/conversations/:conversationID/messages", chatHandler.SendMessage)
+
+		// AI transform route
+		authenticated.POST("/ai/transform", aiTransformHandler.Transform)
+
 	}
 
 	// Start the server

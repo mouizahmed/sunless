@@ -64,7 +64,7 @@ func (h *TranscriptionHandler) Stream(c *gin.Context) {
 	// - keep interim results flowing
 	// - reduce over-segmentation on natural pauses
 	// - emit VAD/utterance boundaries to improve turn segmentation
-	params := "model=nova-3&multichannel=true&channels=2&diarize=true&punctuate=true&smart_format=true&interim_results=true&endpointing=1200&utterance_end_ms=1800&vad_events=true&encoding=linear16&sample_rate=48000"
+	params := "model=nova-3&multichannel=true&channels=2&punctuate=true&smart_format=true&interim_results=true&endpointing=1200&utterance_end_ms=1800&vad_events=true&encoding=linear16&sample_rate=48000"
 	deepgramURL := "wss://api.deepgram.com/v1/listen?" + params
 	header := http.Header{}
 	header.Set("Authorization", "Token "+key)

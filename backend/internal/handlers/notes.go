@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -12,31 +13,32 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/mouizahmed/justscribe-backend/internal/ai"
 	"github.com/mouizahmed/justscribe-backend/internal/models"
 	"github.com/mouizahmed/justscribe-backend/internal/repository"
 	"github.com/mouizahmed/justscribe-backend/internal/storage"
 )
 
 type NotesHandler struct {
-	noteRepo       *repository.NoteRepository
-	folderRepo     *repository.FolderRepository
-	recordingRepo  *repository.RecordingSessionRepository
-	b2Client       *storage.B2Client
-	attachmentRepo *repository.NoteAttachmentRepository
+	noteRepo        *repository.NoteRepository
+	noteVersionRepo *repository.NoteVersionRepository
+	folderRepo      *repository.FolderRepository
+	recordingRepo   *repository.RecordingSessionRepository
+	b2Client        *storage.B2Client
+	attachmentRepo  *repository.NoteAttachmentRepository
+	aiClient        *ai.Client
 }
 
 type CreateNoteRequest struct {
-	Title            *string `json:"title"`
-	FolderID         *string `json:"folder_id"`
-	NoteMarkdown     *string `json:"note_markdown"`
-	EnhancedMarkdown *string `json:"enhanced_markdown"`
+	Title        *string `json:"title"`
+	FolderID     *string `json:"folder_id"`
+	NoteMarkdown *string `json:"note_markdown"`
 }
 
 type UpdateNoteRequest struct {
-	Title            *string `json:"title"`
-	FolderID         *string `json:"folder_id"`
-	NoteMarkdown     *string `json:"note_markdown"`
-	EnhancedMarkdown *string `json:"enhanced_markdown"`
+	Title        *string `json:"title"`
+	FolderID     *string `json:"folder_id"`
+	NoteMarkdown *string `json:"note_markdown"`
 }
 
 type StopRecordingRequest struct {
@@ -62,18 +64,249 @@ type SearchSectionMeta struct {
 	HasMore    bool `json:"has_more"`
 }
 
-func NewNotesHandler(noteRepo *repository.NoteRepository, folderRepo *repository.FolderRepository, recordingRepo *repository.RecordingSessionRepository, b2Client *storage.B2Client, attachmentRepo *repository.NoteAttachmentRepository) *NotesHandler {
+func NewNotesHandler(noteRepo *repository.NoteRepository, noteVersionRepo *repository.NoteVersionRepository, folderRepo *repository.FolderRepository, recordingRepo *repository.RecordingSessionRepository, b2Client *storage.B2Client, attachmentRepo *repository.NoteAttachmentRepository, aiClient *ai.Client) *NotesHandler {
 	return &NotesHandler{
-		noteRepo:       noteRepo,
-		folderRepo:     folderRepo,
-		recordingRepo:  recordingRepo,
-		b2Client:       b2Client,
-		attachmentRepo: attachmentRepo,
+		noteRepo:        noteRepo,
+		noteVersionRepo: noteVersionRepo,
+		folderRepo:      folderRepo,
+		recordingRepo:   recordingRepo,
+		b2Client:        b2Client,
+		attachmentRepo:  attachmentRepo,
+		aiClient:        aiClient,
 	}
 }
 
+type EnhanceNoteRequest struct {
+	Title        string `json:"title"`
+	NoteMarkdown string `json:"note_markdown"`
+}
+
+// EnhanceNote saves a version of the current note, then overwrites note_markdown with the enhanced result.
 func (h *NotesHandler) EnhanceNote(c *gin.Context) {
-	c.JSON(http.StatusServiceUnavailable, gin.H{"error": "note enhancement is being migrated"})
+	userID, err := getUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	noteID := strings.TrimSpace(c.Param("noteID"))
+	if noteID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "note id is required"})
+		return
+	}
+
+	note, err := h.noteRepo.GetNoteByID(userID, noteID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "note not found"})
+		return
+	}
+
+	if strings.TrimSpace(note.NoteMarkdown) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "note has no content to enhance"})
+		return
+	}
+
+	// Save current content as a version before enhancing
+	version, err := h.noteVersionRepo.CreateVersion(noteID, note.NoteMarkdown)
+	if err != nil {
+		log.Printf("notes: failed to save version before enhance for note %s: %v", noteID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save version"})
+		return
+	}
+
+	systemPrompt := `You are an expert note enhancer. Given raw meeting notes or rough notes, produce a clean, well-structured markdown document that:
+- Organizes content with clear headings and sections
+- Fixes grammar and spelling
+- Preserves all important information and details
+- Uses bullet points and numbered lists where appropriate
+- Highlights key decisions, action items, and important points
+- Adds a brief summary at the top if the content is substantial
+- Maintains the original meaning and tone
+
+Output only the enhanced markdown, no preamble or explanation.`
+
+	userContent := fmt.Sprintf("Title: %s\n\nNotes:\n%s", note.Title, note.NoteMarkdown)
+
+	enhanced, err := h.aiClient.Generate(c.Request.Context(), systemPrompt, userContent)
+	if err != nil {
+		log.Printf("notes: failed to enhance note %s: %v", noteID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to enhance note"})
+		return
+	}
+
+	// Overwrite note_markdown with enhanced content
+	note.NoteMarkdown = enhanced
+	updated, err := h.noteRepo.UpdateNote(note)
+	if err != nil {
+		log.Printf("notes: failed to update note %s after enhance: %v", noteID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save enhanced note"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"note": updated, "version_id": version.ID})
+}
+
+type OverviewData struct {
+	Summary      string   `json:"summary"`
+	ActionItems  []string `json:"action_items"`
+	EmailDraft   string   `json:"email_draft"`
+	MessageDraft string   `json:"message_draft"`
+}
+
+// GenerateOverview generates a structured overview (summary, action items, drafts) from the note content.
+func (h *NotesHandler) GenerateOverview(c *gin.Context) {
+	userID, err := getUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	noteID := strings.TrimSpace(c.Param("noteID"))
+	if noteID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "note id is required"})
+		return
+	}
+
+	note, err := h.noteRepo.GetNoteByID(userID, noteID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "note not found"})
+		return
+	}
+
+	if strings.TrimSpace(note.NoteMarkdown) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "note has no content to generate overview"})
+		return
+	}
+
+	systemPrompt := `You are an AI assistant that generates structured overviews from meeting notes. Given the note content, produce a JSON object with exactly these fields:
+- "summary": A concise 2-4 sentence summary of the key points
+- "action_items": An array of action item strings extracted from the notes (empty array if none)
+- "email_draft": A professional follow-up email draft based on the notes (include Subject: line)
+- "message_draft": A concise Slack/Teams-style message summarizing key points and next steps (under 150 words)
+
+Your entire response must be a single raw JSON object. Do not use markdown, code fences, or any text outside the JSON.`
+
+	userContent := fmt.Sprintf("Title: %s\n\nNotes:\n%s", note.Title, note.NoteMarkdown)
+
+	result, err := h.aiClient.Generate(c.Request.Context(), systemPrompt, userContent)
+	if err != nil {
+		log.Printf("notes: failed to generate overview for note %s: %v", noteID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate overview"})
+		return
+	}
+
+	// Strip markdown code fences if the model wrapped the JSON
+	cleaned := strings.TrimSpace(result)
+	if strings.HasPrefix(cleaned, "```") {
+		// Remove opening fence (```json or ```)
+		cleaned = strings.TrimPrefix(cleaned, "```json")
+		cleaned = strings.TrimPrefix(cleaned, "```")
+		// Remove closing fence
+		if idx := strings.LastIndex(cleaned, "```"); idx != -1 {
+			cleaned = cleaned[:idx]
+		}
+		cleaned = strings.TrimSpace(cleaned)
+	}
+
+	var overview OverviewData
+	if err := json.Unmarshal([]byte(cleaned), &overview); err != nil {
+		log.Printf("notes: overview JSON parse failed for note %s: %v\nraw: %s", noteID, err, cleaned)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse overview response"})
+		return
+	}
+	note.OverviewJSON = cleaned
+
+	updated, err := h.noteRepo.UpdateNote(note)
+	if err != nil {
+		log.Printf("notes: failed to save overview for note %s: %v", noteID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save overview"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"note": updated, "overview": overview})
+}
+
+// ListVersions returns the version history for a note.
+func (h *NotesHandler) ListVersions(c *gin.Context) {
+	userID, err := getUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	noteID := strings.TrimSpace(c.Param("noteID"))
+	if noteID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "note id is required"})
+		return
+	}
+
+	// Verify note belongs to user
+	if _, err := h.noteRepo.GetNoteByID(userID, noteID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "note not found"})
+		return
+	}
+
+	versions, err := h.noteVersionRepo.ListVersions(noteID)
+	if err != nil {
+		log.Printf("notes: failed to list versions for note %s: %v", noteID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list versions"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"versions": versions})
+}
+
+// RevertToVersion restores a note to a previous version's content.
+func (h *NotesHandler) RevertToVersion(c *gin.Context) {
+	userID, err := getUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	noteID := strings.TrimSpace(c.Param("noteID"))
+	if noteID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "note id is required"})
+		return
+	}
+
+	versionID := strings.TrimSpace(c.Param("versionID"))
+	if versionID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "version id is required"})
+		return
+	}
+
+	note, err := h.noteRepo.GetNoteByID(userID, noteID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "note not found"})
+		return
+	}
+
+	version, err := h.noteVersionRepo.GetVersion(versionID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "version not found"})
+		return
+	}
+
+	if version.NoteID != noteID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "version does not belong to this note"})
+		return
+	}
+
+	// Save current content as a version before reverting
+	if _, err := h.noteVersionRepo.CreateVersion(noteID, note.NoteMarkdown); err != nil {
+		log.Printf("notes: failed to save version before revert for note %s: %v", noteID, err)
+	}
+
+	note.NoteMarkdown = version.NoteMarkdown
+	updated, err := h.noteRepo.UpdateNote(note)
+	if err != nil {
+		log.Printf("notes: failed to revert note %s to version %s: %v", noteID, versionID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to revert note"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"note": updated})
 }
 
 func (h *NotesHandler) ListNotes(c *gin.Context) {
@@ -248,7 +481,7 @@ func (h *NotesHandler) Search(c *gin.Context) {
 	notes := []models.Note{}
 	notesHasMore := false
 	if noteLimit > 0 {
-		notesWithExtra, err := h.noteRepo.SearchNotes(userID, query, noteLimit+1, noteOffset)
+		notesWithExtra, err := h.noteRepo.SearchNotes(userID, query, nil, noteLimit+1, noteOffset)
 		if err != nil {
 			log.Printf("search: failed to search notes for user %s: %v", userID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to run search"})
@@ -340,11 +573,10 @@ func (h *NotesHandler) CreateNote(c *gin.Context) {
 	}
 
 	note := &models.Note{
-		UserID:           userID,
-		FolderID:         req.FolderID,
-		Title:            title,
-		NoteMarkdown:     derefString(req.NoteMarkdown),
-		EnhancedMarkdown: derefString(req.EnhancedMarkdown),
+		UserID:       userID,
+		FolderID:     req.FolderID,
+		Title:        title,
+		NoteMarkdown: derefString(req.NoteMarkdown),
 	}
 
 	if req.FolderID != nil && strings.TrimSpace(*req.FolderID) != "" {
@@ -387,7 +619,7 @@ func (h *NotesHandler) UpdateNote(c *gin.Context) {
 		return
 	}
 
-	if req.Title == nil && req.FolderID == nil && req.NoteMarkdown == nil && req.EnhancedMarkdown == nil {
+	if req.Title == nil && req.FolderID == nil && req.NoteMarkdown == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "no fields to update"})
 		return
 	}
@@ -420,9 +652,6 @@ func (h *NotesHandler) UpdateNote(c *gin.Context) {
 	}
 	if req.NoteMarkdown != nil {
 		existing.NoteMarkdown = *req.NoteMarkdown
-	}
-	if req.EnhancedMarkdown != nil {
-		existing.EnhancedMarkdown = *req.EnhancedMarkdown
 	}
 
 	updated, err := h.noteRepo.UpdateNote(existing)

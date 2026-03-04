@@ -98,7 +98,7 @@ export function NotesTree({
           variant="ghost"
           className={cn(
             'w-full justify-start gap-1 py-1 px-2 text-xs h-7 hover:bg-violet-100/30 dark:hover:bg-violet-900/20',
-            isFolderActive ? 'bg-violet-200/40 dark:bg-violet-800/30' : '',
+            isExpanded ? 'bg-violet-200/40 dark:bg-violet-800/30' : '',
           )}
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           onClick={() => {

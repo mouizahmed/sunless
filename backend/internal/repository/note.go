@@ -20,9 +20,9 @@ func NewNoteRepository(db *database.DB) *NoteRepository {
 
 func (r *NoteRepository) CreateNote(note *models.Note) (*models.Note, error) {
 	query := `
-		INSERT INTO notes (user_id, folder_id, title, note_markdown, enhanced_markdown)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, user_id, folder_id, title, note_markdown, enhanced_markdown, created_at, updated_at, deleted_at
+		INSERT INTO notes (user_id, folder_id, title, note_markdown)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, user_id, folder_id, title, note_markdown, overview_json, created_at, updated_at, deleted_at
 	`
 
 	folderID := toNullString(note.FolderID)
@@ -30,20 +30,20 @@ func (r *NoteRepository) CreateNote(note *models.Note) (*models.Note, error) {
 	var created models.Note
 	var folder sql.NullString
 	var deleted sql.NullTime
+	var overviewJSON sql.NullString
 	err := r.db.QueryRow(
 		query,
 		note.UserID,
 		folderID,
 		note.Title,
 		note.NoteMarkdown,
-		note.EnhancedMarkdown,
 	).Scan(
 		&created.ID,
 		&created.UserID,
 		&folder,
 		&created.Title,
 		&created.NoteMarkdown,
-		&created.EnhancedMarkdown,
+		&overviewJSON,
 		&created.CreatedAt,
 		&created.UpdatedAt,
 		&deleted,
@@ -54,12 +54,13 @@ func (r *NoteRepository) CreateNote(note *models.Note) (*models.Note, error) {
 
 	created.FolderID = fromNullString(folder)
 	created.DeletedAt = fromNullTime(deleted)
+	created.OverviewJSON = nullStringToString(overviewJSON)
 	return &created, nil
 }
 
 func (r *NoteRepository) ListNotesByUserCursor(userID string, folderID *string, unfiled bool, limit int, cursorUpdatedAt *time.Time, cursorID *string) ([]models.Note, error) {
 	baseQuery := `
-		SELECT id, user_id, folder_id, title, note_markdown, enhanced_markdown, created_at, updated_at, deleted_at
+		SELECT id, user_id, folder_id, title, note_markdown, overview_json, created_at, updated_at, deleted_at
 		FROM notes
 		WHERE user_id = $1 AND deleted_at IS NULL
 	`
@@ -94,13 +95,14 @@ func (r *NoteRepository) ListNotesByUserCursor(userID string, folderID *string, 
 		var note models.Note
 		var folder sql.NullString
 		var deleted sql.NullTime
+		var overviewJSON sql.NullString
 		if err := rows.Scan(
 			&note.ID,
 			&note.UserID,
 			&folder,
 			&note.Title,
 			&note.NoteMarkdown,
-			&note.EnhancedMarkdown,
+			&overviewJSON,
 			&note.CreatedAt,
 			&note.UpdatedAt,
 			&deleted,
@@ -109,6 +111,7 @@ func (r *NoteRepository) ListNotesByUserCursor(userID string, folderID *string, 
 		}
 		note.FolderID = fromNullString(folder)
 		note.DeletedAt = fromNullTime(deleted)
+		note.OverviewJSON = nullStringToString(overviewJSON)
 		notes = append(notes, note)
 	}
 
@@ -121,7 +124,7 @@ func (r *NoteRepository) ListNotesByUserCursor(userID string, folderID *string, 
 
 func (r *NoteRepository) GetNoteByID(userID, noteID string) (*models.Note, error) {
 	query := `
-		SELECT id, user_id, folder_id, title, note_markdown, enhanced_markdown, created_at, updated_at, deleted_at
+		SELECT id, user_id, folder_id, title, note_markdown, overview_json, created_at, updated_at, deleted_at
 		FROM notes
 		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
 		LIMIT 1
@@ -130,13 +133,14 @@ func (r *NoteRepository) GetNoteByID(userID, noteID string) (*models.Note, error
 	var note models.Note
 	var folder sql.NullString
 	var deleted sql.NullTime
+	var overviewJSON sql.NullString
 	err := r.db.QueryRow(query, noteID, userID).Scan(
 		&note.ID,
 		&note.UserID,
 		&folder,
 		&note.Title,
 		&note.NoteMarkdown,
-		&note.EnhancedMarkdown,
+		&overviewJSON,
 		&note.CreatedAt,
 		&note.UpdatedAt,
 		&deleted,
@@ -150,6 +154,7 @@ func (r *NoteRepository) GetNoteByID(userID, noteID string) (*models.Note, error
 
 	note.FolderID = fromNullString(folder)
 	note.DeletedAt = fromNullTime(deleted)
+	note.OverviewJSON = nullStringToString(overviewJSON)
 	return &note, nil
 }
 
@@ -180,10 +185,10 @@ func (r *NoteRepository) UpdateNote(note *models.Note) (*models.Note, error) {
 		SET folder_id = $3,
 			title = $4,
 			note_markdown = $5,
-			enhanced_markdown = $6,
+			overview_json = $6,
 			updated_at = NOW()
 		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
-		RETURNING id, user_id, folder_id, title, note_markdown, enhanced_markdown, created_at, updated_at, deleted_at
+		RETURNING id, user_id, folder_id, title, note_markdown, overview_json, created_at, updated_at, deleted_at
 	`
 
 	folderID := toNullString(note.FolderID)
@@ -191,6 +196,7 @@ func (r *NoteRepository) UpdateNote(note *models.Note) (*models.Note, error) {
 	var updated models.Note
 	var folder sql.NullString
 	var deleted sql.NullTime
+	var overviewJSON sql.NullString
 	err := r.db.QueryRow(
 		query,
 		note.ID,
@@ -198,14 +204,14 @@ func (r *NoteRepository) UpdateNote(note *models.Note) (*models.Note, error) {
 		folderID,
 		note.Title,
 		note.NoteMarkdown,
-		note.EnhancedMarkdown,
+		note.OverviewJSON,
 	).Scan(
 		&updated.ID,
 		&updated.UserID,
 		&folder,
 		&updated.Title,
 		&updated.NoteMarkdown,
-		&updated.EnhancedMarkdown,
+		&overviewJSON,
 		&updated.CreatedAt,
 		&updated.UpdatedAt,
 		&deleted,
@@ -219,6 +225,7 @@ func (r *NoteRepository) UpdateNote(note *models.Note) (*models.Note, error) {
 
 	updated.FolderID = fromNullString(folder)
 	updated.DeletedAt = fromNullTime(deleted)
+	updated.OverviewJSON = nullStringToString(overviewJSON)
 	return &updated, nil
 }
 
@@ -242,7 +249,7 @@ func (r *NoteRepository) DeleteNote(userID, noteID string) (bool, error) {
 	return affected > 0, nil
 }
 
-func (r *NoteRepository) SearchNotes(userID, query string, limit, offset int) ([]models.Note, error) {
+func (r *NoteRepository) SearchNotes(userID, query string, folderID *string, limit, offset int) ([]models.Note, error) {
 	search := strings.TrimSpace(query)
 	if search == "" {
 		return []models.Note{}, nil
@@ -259,26 +266,33 @@ func (r *NoteRepository) SearchNotes(userID, query string, limit, offset int) ([
 
 	pattern := "%" + search + "%"
 	sqlQuery := `
-		SELECT id, user_id, folder_id, title, note_markdown, enhanced_markdown, created_at, updated_at, deleted_at
+		SELECT id, user_id, folder_id, title, note_markdown, overview_json, created_at, updated_at, deleted_at
 		FROM notes
 		WHERE user_id = $1
 			AND deleted_at IS NULL
 			AND (
 				title ILIKE $2
 				OR note_markdown ILIKE $2
-				OR enhanced_markdown ILIKE $2
 				OR EXISTS (
 					SELECT 1 FROM transcript_segments ts
-					JOIN transcript_speakers tsp ON tsp.id = ts.speaker_id
-					WHERE ts.note_id = notes.id AND tsp.user_id = $1 AND ts.text ILIKE $2
+					WHERE ts.note_id = notes.id AND ts.text ILIKE $2
 				)
 			)
-		ORDER BY updated_at DESC, id DESC
-		LIMIT $3
-		OFFSET $4
 	`
 
-	rows, err := r.db.Query(sqlQuery, userID, pattern, limit, offset)
+	args := []interface{}{userID, pattern}
+	argPos := 3
+
+	if folderID != nil {
+		sqlQuery += fmt.Sprintf(" AND folder_id = $%d", argPos)
+		args = append(args, *folderID)
+		argPos++
+	}
+
+	sqlQuery += fmt.Sprintf(" ORDER BY updated_at DESC, id DESC LIMIT $%d OFFSET $%d", argPos, argPos+1)
+	args = append(args, limit, offset)
+
+	rows, err := r.db.Query(sqlQuery, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search notes: %w", err)
 	}
@@ -289,13 +303,14 @@ func (r *NoteRepository) SearchNotes(userID, query string, limit, offset int) ([
 		var note models.Note
 		var folder sql.NullString
 		var deleted sql.NullTime
+		var overviewJSON sql.NullString
 		if err := rows.Scan(
 			&note.ID,
 			&note.UserID,
 			&folder,
 			&note.Title,
 			&note.NoteMarkdown,
-			&note.EnhancedMarkdown,
+			&overviewJSON,
 			&note.CreatedAt,
 			&note.UpdatedAt,
 			&deleted,
@@ -304,6 +319,7 @@ func (r *NoteRepository) SearchNotes(userID, query string, limit, offset int) ([
 		}
 		note.FolderID = fromNullString(folder)
 		note.DeletedAt = fromNullTime(deleted)
+		note.OverviewJSON = nullStringToString(overviewJSON)
 		notes = append(notes, note)
 	}
 
@@ -312,6 +328,92 @@ func (r *NoteRepository) SearchNotes(userID, query string, limit, offset int) ([
 	}
 
 	return notes, nil
+}
+
+type FolderNoteCount struct {
+	FolderID *string
+	Name     string
+	Count    int
+}
+
+func (r *NoteRepository) CountNotesByFolderGrouped(userID string) ([]FolderNoteCount, int, error) {
+	query := `
+		SELECT n.folder_id, COALESCE(f.name, 'Uncategorized'), COUNT(*)
+		FROM notes n
+		LEFT JOIN folders f ON f.id = n.folder_id AND f.deleted_at IS NULL
+		WHERE n.user_id = $1 AND n.deleted_at IS NULL
+		GROUP BY n.folder_id, f.name
+		ORDER BY COUNT(*) DESC
+	`
+
+	rows, err := r.db.Query(query, userID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count notes by folder: %w", err)
+	}
+	defer rows.Close()
+
+	var results []FolderNoteCount
+	total := 0
+	for rows.Next() {
+		var fc FolderNoteCount
+		var folderID sql.NullString
+		if err := rows.Scan(&folderID, &fc.Name, &fc.Count); err != nil {
+			return nil, 0, fmt.Errorf("failed to scan folder count: %w", err)
+		}
+		fc.FolderID = fromNullString(folderID)
+		total += fc.Count
+		results = append(results, fc)
+	}
+
+	return results, total, rows.Err()
+}
+
+func (r *NoteRepository) ListNotesByDateRange(userID string, startDate, endDate time.Time, limit int) ([]models.Note, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+
+	query := `
+		SELECT id, user_id, folder_id, title, note_markdown, overview_json, created_at, updated_at, deleted_at
+		FROM notes
+		WHERE user_id = $1 AND deleted_at IS NULL
+		AND created_at >= $2 AND created_at < $3
+		ORDER BY created_at DESC
+		LIMIT $4
+	`
+
+	rows, err := r.db.Query(query, userID, startDate, endDate, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list notes by date range: %w", err)
+	}
+	defer rows.Close()
+
+	notes := []models.Note{}
+	for rows.Next() {
+		var note models.Note
+		var folder sql.NullString
+		var deleted sql.NullTime
+		var overviewJSON sql.NullString
+		if err := rows.Scan(
+			&note.ID,
+			&note.UserID,
+			&folder,
+			&note.Title,
+			&note.NoteMarkdown,
+			&overviewJSON,
+			&note.CreatedAt,
+			&note.UpdatedAt,
+			&deleted,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan note: %w", err)
+		}
+		note.FolderID = fromNullString(folder)
+		note.DeletedAt = fromNullTime(deleted)
+		note.OverviewJSON = nullStringToString(overviewJSON)
+		notes = append(notes, note)
+	}
+
+	return notes, rows.Err()
 }
 
 func toNullString(value *string) sql.NullString {
@@ -335,4 +437,11 @@ func fromNullTime(value sql.NullTime) *time.Time {
 	}
 	val := value.Time
 	return &val
+}
+
+func nullStringToString(value sql.NullString) string {
+	if !value.Valid {
+		return ""
+	}
+	return value.String
 }

@@ -9,7 +9,6 @@ interface DeepgramWord {
   start: number
   end: number
   confidence: number
-  speaker?: number
   punctuated_word?: string
 }
 
@@ -39,16 +38,9 @@ const CONTINUATION_GAP_SECONDS = 3.5
 const MAX_MERGED_WORDS = 80
 const INTERIM_EMIT_INTERVAL_MS = 120
 const CONNECT_TIMEOUT_MS = 10000
-const DELAYED_SWITCH_MAX_WORDS = 12
-const DELAYED_SWITCH_MAX_GAP_MS = 15000
-const INTERIM_TRAILING_WORD_WINDOW = 8
-const INTERIM_MIN_DOMINANT_SHARE = 0.5
-const LATE_SWITCH_SHORT_GROUP_WORDS = 4
-const LATE_SWITCH_DOMINANCE_RATIO = 2.2
 const ECHO_WINDOW_MS = 1500
 const ECHO_OVERLAP_THRESHOLD = 0.6
 const ECHO_MIN_WORDS = 3
-const DEBUG_TRANSCRIPT_SPEAKERS = true
 
 export class DeepgramClient {
   private ws: WebSocket | null = null
@@ -63,10 +55,6 @@ export class DeepgramClient {
   private flushTimer: ReturnType<typeof setInterval> | null = null
   private authenticated = false
   private lastInterimEmitMs = 0
-
-  private speakerLabelMap = new Map<number, string>()
-  private nextSpeakerNumber = 1
-  private lastInterimSpeakerId: number | null = null
 
   private turnSealedCh0 = false
   private turnSealedCh1 = false
@@ -228,10 +216,7 @@ export class DeepgramClient {
 
   getTranscriptText(): string {
     return this.finalSegments
-      .map((s) => {
-        const label = s.speakerLabel || s.speaker || 'Unknown'
-        return `${label}: ${s.text}`
-      })
+      .map((s) => s.text)
       .join('\n')
   }
 
@@ -292,7 +277,6 @@ export class DeepgramClient {
       const ch = response.channel_index?.[0] ?? 0
       if (ch === 0) this.turnSealedCh0 = true
       else this.turnSealedCh1 = true
-      this.debugSpeaker('speech-started', { channel: ch, sealedCh0: this.turnSealedCh0, sealedCh1: this.turnSealedCh1 })
       return
     }
 
@@ -305,47 +289,29 @@ export class DeepgramClient {
     const transcript = (alt.transcript ?? '').trim()
     const speechFinal = response.is_final && response.speech_final
 
-    this.debugSpeaker('raw-result', {
-      channel: channelIndex,
-      isFinal: response.is_final,
-      speechFinal,
-      transcript: transcript.slice(0, 150),
-      wordCount: alt.words.length,
-      wordSpeakers: alt.words.map((w) => ({ word: w.punctuated_word || w.word, speaker: w.speaker })),
-    })
-
     if (!transcript) {
       if (response.is_final) {
         const before = this.interimSegments.length
         this.interimSegments = this.interimSegments.filter((s) => s.channel !== channelIndex)
         if (before !== this.interimSegments.length) {
-          this.debugSpeaker('cleared-empty-interim', { channel: channelIndex })
           this.emitSegments()
         }
       }
       return
     }
 
+    // Echo suppression: if channel 1 text heavily overlaps recent channel 0 text, skip it
     if (channelIndex === 1 && response.is_final) {
       if (this.isEcho(transcript)) {
-        this.debugSpeaker('echo-suppressed', { textPreview: transcript.slice(0, 100) })
         return
       }
     }
 
-    if (channelIndex === 0) {
-      this.debugSpeaker('route-ch0', { isFinal: response.is_final, textPreview: transcript.slice(0, 100) })
-      this.handleChannelSegment(transcript, 'user', 'You', response.is_final, 0, alt.words, speechFinal)
-      return
-    }
-    this.debugSpeaker('route-ch1-diarized', { isFinal: response.is_final, textPreview: transcript.slice(0, 100) })
-    this.handleDiarizedSegment(transcript, response.is_final, speechFinal, 1, alt.words)
+    this.handleChannelSegment(transcript, response.is_final, channelIndex, alt.words, speechFinal)
   }
 
   private handleChannelSegment(
     transcript: string,
-    speaker: string,
-    speakerLabel: string,
     isFinal: boolean,
     channel: number,
     words: DeepgramWord[],
@@ -367,11 +333,7 @@ export class DeepgramClient {
 
       if (!sealed) {
         const lastFinal = this.finalSegments[this.finalSegments.length - 1]
-        if (
-          lastFinal &&
-          lastFinal.channel === channel &&
-          (lastFinal.speakerLabel || lastFinal.speaker) === speakerLabel
-        ) {
+        if (lastFinal && lastFinal.channel === channel) {
           const hasTiming = startTime !== undefined && lastFinal.endTime !== undefined
           const gapSeconds = hasTiming
             ? Math.max(0, startTime - lastFinal.endTime!)
@@ -380,25 +342,11 @@ export class DeepgramClient {
           const previousText = lastFinal.text.trim()
           const endsSentence = /[.!?]["']?$/.test(previousText)
           const startsLowercase = /^[a-z]/.test(transcript)
-          const previousIsShort = previousText.split(/\s+/).length <= 14
-          const looksLikeContinuation = !endsSentence || startsLowercase || previousIsShort
+          const looksLikeContinuation = !endsSentence || startsLowercase
 
           const mergedWordCount =
             previousText.split(/\s+/).filter(Boolean).length +
             transcript.split(/\s+/).filter(Boolean).length
-
-          this.debugSpeaker('merge-check', {
-            channel,
-            speaker: speakerLabel,
-            gapSeconds: Math.round(gapSeconds * 100) / 100,
-            endsSentence,
-            startsLowercase,
-            previousIsShort,
-            looksLikeContinuation,
-            mergedWordCount,
-            prevTextPreview: previousText.slice(0, 60),
-            newTextPreview: transcript.slice(0, 60),
-          })
 
           if (
             gapSeconds <= MERGE_GAP_SECONDS ||
@@ -412,7 +360,6 @@ export class DeepgramClient {
               }
               lastFinal.createdAt = Date.now()
               merged = true
-              this.debugSpeaker('merged', { channel, speaker: speakerLabel, totalWords: mergedWordCount })
             }
           }
         }
@@ -423,27 +370,12 @@ export class DeepgramClient {
           id: `dg-${++this.segmentIdCounter}`,
           text: transcript,
           createdAt: Date.now(),
-          speaker,
-          speakerLabel,
           pending: false,
           channel,
           startTime,
           endTime,
         }
         this.finalSegments.push(segment)
-        this.debugSpeaker('new-final-segment', {
-          id: segment.id,
-          channel,
-          speaker: speakerLabel,
-          sealed,
-          textPreview: transcript.slice(0, 100),
-          startTime,
-          endTime,
-          totalFinals: this.finalSegments.length,
-        })
-        if (channel === 1) {
-          this.correctLikelyDelayedSpeakerSwitch()
-        }
       }
 
       // Record ch0 text for echo suppression
@@ -470,139 +402,12 @@ export class DeepgramClient {
       id: `dg-interim-ch${channel}`,
       text: transcript,
       createdAt: Date.now(),
-      speaker,
-      speakerLabel,
       pending: true,
       channel,
       startTime,
       endTime,
     })
     this.emitInterimSegmentsThrottled()
-  }
-
-  private handleDiarizedSegment(
-    transcript: string,
-    isFinal: boolean,
-    speechFinal: boolean,
-    channel: number,
-    words: DeepgramWord[],
-  ) {
-    if (!isFinal) {
-      const speakerId = this.pickInterimSpeaker(words)
-
-      this.lastInterimSpeakerId = speakerId
-      const label = this.getSpeakerLabel(speakerId)
-      this.debugSpeaker('interim-speaker', {
-        speakerId,
-        label,
-        words: words.length,
-        textPreview: transcript.slice(0, 120),
-      })
-      this.handleChannelSegment(transcript, label, label, false, channel, words)
-      return
-    }
-
-    this.lastInterimSpeakerId = null
-
-    const groups: { speakerId: number; words: DeepgramWord[]; text: string }[] = []
-    let currentGroup: { speakerId: number; words: DeepgramWord[]; text: string } | null = null
-
-    for (const word of words) {
-      const speakerId = word.speaker ?? 0
-      if (!currentGroup || currentGroup.speakerId !== speakerId) {
-        currentGroup = { speakerId, words: [], text: '' }
-        groups.push(currentGroup)
-      }
-      currentGroup.words.push(word)
-      currentGroup.text += (currentGroup.text ? ' ' : '') + (word.punctuated_word || word.word)
-    }
-
-    this.debugSpeaker('diarized-groups-raw', {
-      groupCount: groups.length,
-      groups: groups.map((g) => ({
-        speakerId: g.speakerId,
-        words: g.words.length,
-        textPreview: g.text.slice(0, 80),
-      })),
-    })
-
-    if (groups.length === 0) {
-      this.debugSpeaker('diarized-no-groups', { textPreview: transcript.slice(0, 100) })
-      this.handleChannelSegment(transcript, 'Speaker 1', 'Speaker 1', true, channel, words, speechFinal)
-      return
-    }
-
-    // If diarization switches late, the first tiny group can be mis-attributed to the previous speaker.
-    // Re-assign tiny lead-in group to the next speaker when the next group clearly dominates.
-    if (groups.length >= 2) {
-      const first = groups[0]
-      const second = groups[1]
-      const firstWords = first.words.length
-      const secondWords = second.words.length
-      if (
-        first.speakerId !== second.speakerId &&
-        firstWords > 0 &&
-        firstWords <= LATE_SWITCH_SHORT_GROUP_WORDS &&
-        secondWords >= Math.ceil(firstWords * LATE_SWITCH_DOMINANCE_RATIO)
-      ) {
-        this.debugSpeaker('lead-in-correction', {
-          fromSpeaker: first.speakerId,
-          toSpeaker: second.speakerId,
-          firstWords,
-          secondWords,
-          textPreview: first.text.slice(0, 80),
-        })
-        first.speakerId = second.speakerId
-      }
-    }
-
-    // Also fix tail-lag: last tiny group mis-attributed to current speaker
-    if (groups.length >= 2) {
-      const last = groups[groups.length - 1]
-      const secondLast = groups[groups.length - 2]
-      if (
-        last.speakerId !== secondLast.speakerId &&
-        last.words.length > 0 &&
-        last.words.length <= LATE_SWITCH_SHORT_GROUP_WORDS &&
-        secondLast.words.length >= Math.ceil(last.words.length * LATE_SWITCH_DOMINANCE_RATIO)
-      ) {
-        this.debugSpeaker('tail-lag-correction', {
-          fromSpeaker: last.speakerId,
-          toSpeaker: secondLast.speakerId,
-          lastWords: last.words.length,
-          secondLastWords: secondLast.words.length,
-          textPreview: last.text.slice(0, 80),
-        })
-        last.speakerId = secondLast.speakerId
-      }
-    }
-
-    for (let i = 0; i < groups.length; i++) {
-      const group = groups[i]
-      const isLastGroup = i === groups.length - 1
-      const label = this.getSpeakerLabel(group.speakerId)
-      this.debugSpeaker('final-group', {
-        speakerId: group.speakerId,
-        label,
-        words: group.words.length,
-        textPreview: group.text.slice(0, 120),
-      })
-      this.handleChannelSegment(group.text, label, label, true, channel, group.words, isLastGroup ? speechFinal : false)
-    }
-  }
-
-  private getSpeakerLabel(speakerId: number): string {
-    let label = this.speakerLabelMap.get(speakerId)
-    if (!label) {
-      label = `Speaker ${this.nextSpeakerNumber++}`
-      this.speakerLabelMap.set(speakerId, label)
-      this.debugSpeaker('new-speaker-label', {
-        speakerId,
-        label,
-        allMappings: Object.fromEntries(this.speakerLabelMap),
-      })
-    }
-    return label
   }
 
   private emitSegments() {
@@ -615,39 +420,6 @@ export class DeepgramClient {
     if (now - this.lastInterimEmitMs < INTERIM_EMIT_INTERVAL_MS) return
     this.lastInterimEmitMs = now
     this.emitSegments()
-  }
-
-  private correctLikelyDelayedSpeakerSwitch() {
-    const channelFinals = this.finalSegments.filter((segment) => segment.channel === 1 && !segment.pending)
-    if (channelFinals.length < 3) return
-
-    const a = channelFinals[channelFinals.length - 3]
-    const b = channelFinals[channelFinals.length - 2]
-    const c = channelFinals[channelFinals.length - 1]
-    if (!a || !b || !c) return
-
-    const aSpeaker = a.speakerLabel || a.speaker
-    const bSpeaker = b.speakerLabel || b.speaker
-    const cSpeaker = c.speakerLabel || c.speaker
-    if (!aSpeaker || !bSpeaker || !cSpeaker) return
-
-    if (aSpeaker !== bSpeaker || bSpeaker === cSpeaker) return
-
-    const wordCount = b.text.trim().split(/\s+/).filter(Boolean).length
-    if (wordCount === 0 || wordCount > DELAYED_SWITCH_MAX_WORDS) return
-
-    const gapMs = c.createdAt - b.createdAt
-    if (gapMs < 0 || gapMs > DELAYED_SWITCH_MAX_GAP_MS) return
-
-    this.debugSpeaker('delayed-switch-correction', {
-      fromSpeaker: bSpeaker,
-      toSpeaker: cSpeaker,
-      textPreview: b.text.slice(0, 140),
-      gapMs,
-      wordCount,
-    })
-    b.speaker = c.speaker
-    b.speakerLabel = c.speakerLabel
   }
 
   private isEcho(text: string): boolean {
@@ -664,70 +436,8 @@ export class DeepgramClient {
         if (entry.words.has(w)) overlap++
       }
       const ratio = overlap / Math.min(ch1Words.size, entry.words.size)
-      this.debugSpeaker('echo-check', {
-        ch1WordCount: ch1Words.size,
-        ch0WordCount: entry.words.size,
-        overlap,
-        ratio: Math.round(ratio * 100) / 100,
-        threshold: ECHO_OVERLAP_THRESHOLD,
-        isEcho: ratio >= ECHO_OVERLAP_THRESHOLD,
-        ch1Preview: text.slice(0, 80),
-        ch0Preview: entry.text.slice(0, 80),
-      })
       if (ratio >= ECHO_OVERLAP_THRESHOLD) return true
     }
     return false
-  }
-
-  private debugSpeaker(event: string, payload: Record<string, unknown>) {
-    if (!DEBUG_TRANSCRIPT_SPEAKERS) return
-    console.debug(`[transcript:${event}]`, payload)
-  }
-
-  private pickInterimSpeaker(words: DeepgramWord[]): number {
-    if (words.length === 0) {
-      this.debugSpeaker('pick-interim-no-words', { fallback: this.lastInterimSpeakerId ?? 0 })
-      return this.lastInterimSpeakerId ?? 0
-    }
-
-    const trailing = words.slice(-INTERIM_TRAILING_WORD_WINDOW)
-    const counts = new Map<number, number>()
-    let explicitCount = 0
-    for (const word of trailing) {
-      if (typeof word.speaker !== 'number') continue
-      explicitCount++
-      counts.set(word.speaker, (counts.get(word.speaker) ?? 0) + 1)
-    }
-
-    if (explicitCount === 0) {
-      this.debugSpeaker('pick-interim-no-explicit', { totalWords: words.length, fallback: this.lastInterimSpeakerId ?? 0 })
-      return this.lastInterimSpeakerId ?? 0
-    }
-
-    let dominantSpeaker = this.lastInterimSpeakerId ?? 0
-    let dominantCount = -1
-    for (const [speakerId, count] of counts.entries()) {
-      if (count > dominantCount) {
-        dominantSpeaker = speakerId
-        dominantCount = count
-      }
-    }
-
-    const share = dominantCount / explicitCount
-    this.debugSpeaker('pick-interim-result', {
-      trailingWords: trailing.length,
-      explicitCount,
-      counts: Object.fromEntries(counts),
-      dominantSpeaker,
-      dominantCount,
-      share: Math.round(share * 100) / 100,
-      lastInterim: this.lastInterimSpeakerId,
-      belowThreshold: share < INTERIM_MIN_DOMINANT_SHARE,
-    })
-
-    if (share < INTERIM_MIN_DOMINANT_SHARE && this.lastInterimSpeakerId !== null) {
-      return this.lastInterimSpeakerId
-    }
-    return dominantSpeaker
   }
 }

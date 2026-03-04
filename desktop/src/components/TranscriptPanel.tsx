@@ -12,48 +12,8 @@ type TranscriptPanelProps = {
   className?: string
 }
 
-const KNOWN_SPEAKER_LABELS: Record<string, string> = {
-  user: 'You',
-  assistant: 'Sunless',
-  system: 'System',
-}
-
 const TRANSCRIPT_WARNING_TEXT =
   'The transcript may show repeated sentences without headphones, but your final notes will be unaffected. For the best experience, use headphones.'
-
-function getSpeakerLabel(segment: LiveTranscriptSegment): string {
-  if (segment.speakerLabel) return segment.speakerLabel
-  const speaker = segment.speaker ?? 'assistant'
-  return KNOWN_SPEAKER_LABELS[speaker] ?? speaker
-}
-
-function splitDisplayLines(text: string): string[] {
-  const normalized = text.replace(/\s+/g, ' ').trim()
-  if (!normalized) return []
-
-  const sentences = normalized.split(/(?<=[.!?])\s+/)
-  const lines: string[] = []
-  let current = ''
-
-  const MAX_WORDS_PER_LINE = 26
-  const MAX_CHARS_PER_LINE = 180
-
-  for (const sentence of sentences) {
-    const candidate = current ? `${current} ${sentence}` : sentence
-    const wordCount = candidate.split(/\s+/).filter(Boolean).length
-
-    if (!current || (wordCount <= MAX_WORDS_PER_LINE && candidate.length <= MAX_CHARS_PER_LINE)) {
-      current = candidate
-      continue
-    }
-
-    lines.push(current)
-    current = sentence
-  }
-
-  if (current) lines.push(current)
-  return lines
-}
 
 export default function TranscriptPanel({
   segments,
@@ -69,35 +29,14 @@ export default function TranscriptPanel({
       }
 
       if (isProcessing) {
-        return 'Listening… I’ll drop notes here as soon as I hear something worth capturing.'
+        return "Listening\u2026 I'll drop notes here as soon as I hear something worth capturing."
       }
 
-      return 'I’ll jot down a running transcript here once the live session gets going.'
+      return "I'll jot down a running transcript here once the live session gets going."
     }
 
     return null
   }, [segments.length, status, isProcessing])
-
-  const groupedSegments = useMemo(() => {
-    const groups: Array<{ speakerLabel: string; items: LiveTranscriptSegment[] }> = []
-
-    for (const segment of segments) {
-      const label = getSpeakerLabel(segment)
-      const lastGroup = groups[groups.length - 1]
-
-      if (!lastGroup || lastGroup.speakerLabel !== label) {
-        groups.push({
-          speakerLabel: label,
-          items: [segment],
-        })
-        continue
-      }
-
-      lastGroup.items.push(segment)
-    }
-
-    return groups
-  }, [segments])
 
   const containerClassName =
     appearance === 'embedded'
@@ -114,28 +53,30 @@ export default function TranscriptPanel({
           {content}
         </div>
       ) : (
-        <div className="attachments-scrollbar max-h-60 space-y-4 overflow-y-auto pr-1">
-          {groupedSegments.map((group, groupIndex) => (
-            <div key={`${group.items[0]?.id ?? group.speakerLabel}-${groupIndex}`} className="space-y-1.5">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-white/55">
-                {group.speakerLabel}
+        <div className="attachments-scrollbar max-h-60 space-y-1.5 overflow-y-auto pr-1">
+          {segments.map((segment) => {
+            const isMic = (segment.channel ?? 0) === 0
+            return (
+              <div
+                key={segment.id}
+                className={cn('flex', isMic ? 'justify-end' : 'justify-start')}
+              >
+                <div
+                  className={cn(
+                    'max-w-[80%] rounded-lg px-3 py-1.5 text-sm',
+                    isMic
+                      ? 'bg-white/15 text-white/90'
+                      : 'bg-white/10 text-white/85',
+                    segment.pending && 'opacity-70',
+                  )}
+                >
+                  {segment.text}
+                </div>
               </div>
-              <div className="space-y-1">
-                {group.items.map((segment) => (
-                  <div key={segment.id} className={cn('space-y-1', segment.pending && 'opacity-80')}>
-                    {splitDisplayLines(segment.text).map((line, lineIndex) => (
-                      <p key={`${segment.id}-${lineIndex}`} className="whitespace-pre-wrap text-sm leading-relaxed text-white/85">
-                        {line}
-                      </p>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
   )
 }
-

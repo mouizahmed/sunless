@@ -4,7 +4,7 @@ import { DeepgramClient } from '@/lib/deepgram-client'
 import { startMicCapture, startSystemAudioCapture, type AudioCaptureHandle } from '@/lib/audio-capture'
 import type { LiveTranscriptSegment } from '@/types/live-insight'
 import { saveTranscriptSegments } from '@/lib/transcript-client'
-import type { TranscriptSpeakerPayload, TranscriptSegmentPayload } from '@/lib/transcript-client'
+import type { TranscriptSegmentPayload } from '@/lib/transcript-client'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api'
 const TRANSCRIPTION_WS_URL = (() => {
@@ -98,47 +98,17 @@ export function useTranscription({
     const unsaved = allFinal.slice(lastSavedIndexRef.current)
     if (unsaved.length === 0) return
 
-    // Build unique speakers from unsaved segments
-    const speakerSet = new Map<string, TranscriptSpeakerPayload>()
-    for (const seg of unsaved) {
-      const channel = seg.channel ?? 0
-      // Derive speaker_key: channel 0 = user ("You"), channel 1 = diarized speakers
-      let speakerKey = 0
-      if (channel === 1 && seg.speakerLabel) {
-        const match = seg.speakerLabel.match(/Speaker (\d+)/)
-        speakerKey = match ? parseInt(match[1], 10) : 0
-      }
-      const key = `${speakerKey}:${channel}`
-      if (!speakerSet.has(key)) {
-        speakerSet.set(key, {
-          speaker_key: speakerKey,
-          channel,
-          label: seg.speakerLabel || seg.speaker || 'Unknown',
-        })
-      }
-    }
-
-    const speakers = Array.from(speakerSet.values())
     const baseIndex = lastSavedIndexRef.current
-    const segmentPayloads: TranscriptSegmentPayload[] = unsaved.map((seg, i) => {
-      const channel = seg.channel ?? 0
-      let speakerKey = 0
-      if (channel === 1 && seg.speakerLabel) {
-        const match = seg.speakerLabel.match(/Speaker (\d+)/)
-        speakerKey = match ? parseInt(match[1], 10) : 0
-      }
-      return {
-        speaker_key: speakerKey,
-        channel,
-        text: seg.text,
-        start_time: seg.startTime,
-        end_time: seg.endTime,
-        segment_index: baseIndex + i,
-      }
-    })
+    const segmentPayloads: TranscriptSegmentPayload[] = unsaved.map((seg, i) => ({
+      channel: seg.channel ?? 0,
+      text: seg.text,
+      start_time: seg.startTime,
+      end_time: seg.endTime,
+      segment_index: baseIndex + i,
+    }))
 
     try {
-      await saveTranscriptSegments(noteId, speakers, segmentPayloads)
+      await saveTranscriptSegments(noteId, segmentPayloads)
       lastSavedIndexRef.current += unsaved.length
     } catch (err) {
       console.error('Failed to save transcript segments:', err)

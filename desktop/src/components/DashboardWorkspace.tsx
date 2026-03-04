@@ -1,81 +1,41 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
-import { Loader2, Sparkles, Trash2 } from 'lucide-react'
+import { Fragment, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
+import { Check, Folder, Loader2, Sparkles, FileText, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import Response from '@/components/ui/shadcn-io/ai/response'
 import { InfoBanner } from '@/components/ui/info-banner'
-import { auth } from '@/config/firebase'
-import { updateNote } from '@/lib/notes-client'
-import { getTranscriptSegments, type TranscriptSpeaker, type TranscriptSegment } from '@/lib/transcript-client'
+import { updateNote, enhanceNote, generateOverview } from '@/lib/notes-client'
+import { getTranscriptSegments, type TranscriptSegment } from '@/lib/transcript-client'
 import SavedTranscriptView from '@/components/SavedTranscriptView'
 import MarkdownEditor from '@/components/MarkdownEditor'
+import OverviewPanel from '@/components/OverviewPanel'
 import DashboardHome from '@/components/DashboardHome'
 import { useDashboardNotes } from '@/contexts/DashboardNotesContext'
+import type { OverviewData } from '@/types/note'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api'
-const UNFILED_VALUE = '__unfiled__'
+type Tab = 'notes' | 'overview'
 
 type DashboardWorkspaceProps = {
   userId?: string
 }
 
-async function enhanceNote(params: { title: string; noteMarkdown: string }) {
-  const currentUser = auth.currentUser
-  if (!currentUser) throw new Error('Not authenticated')
-  const idToken = await currentUser.getIdToken()
-
-  const response = await fetch(`${API_BASE_URL}/notes/enhance`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      Authorization: `Bearer ${idToken}`,
-    },
-    body: JSON.stringify({
-      title: params.title,
-      note_markdown: params.noteMarkdown,
-    }),
-  })
-
-  if (!response.ok) {
-    let message = 'Failed to enhance note'
-    try {
-      const payload = (await response.json()) as { error?: string; details?: string }
-      message = payload.details || payload.error || message
-    } catch {
-      // ignore
-    }
-    throw new Error(message)
-  }
-
-  const payload = (await response.json()) as { enhanced_markdown?: string }
-  return payload.enhanced_markdown ?? ''
-}
-
 export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) {
-  const { folders, selectedId, selected, deleteById, optimisticPatch, replaceNote } = useDashboardNotes()
-  const [tab, setTab] = useState<'original' | 'enhanced'>('original')
-  const [transcriptOpen, setTranscriptOpen] = useState(false)
+  const { folders, selectedId, selected, optimisticPatch, replaceNote } = useDashboardNotes()
+  const [tab, setTab] = useState<Tab>('notes')
 
   const [draftTitle, setDraftTitle] = useState('')
-  const [editingTitle, setEditingTitle] = useState(false)
-  const titleInputRef = useRef<HTMLInputElement>(null)
+  const [folderPickerOpen, setFolderPickerOpen] = useState(false)
+  const folderPickerRef = useRef<HTMLDivElement | null>(null)
   const [draftFolderId, setDraftFolderId] = useState('')
   const [draftNote, setDraftNote] = useState('')
-  const [draftEnhanced, setDraftEnhanced] = useState('')
 
   const [isEnhancing, setIsEnhancing] = useState(false)
   const [enhanceError, setEnhanceError] = useState<string | null>(null)
 
-  const [transcriptSpeakers, setTranscriptSpeakers] = useState<TranscriptSpeaker[]>([])
+  const [overview, setOverview] = useState<OverviewData | null>(null)
+  const [overviewLoading, setOverviewLoading] = useState(false)
+  const overviewTimerRef = useRef<number | null>(null)
+
+  const [transcriptOpen, setTranscriptOpen] = useState(false)
   const [transcriptSegments, setTranscriptSegments] = useState<TranscriptSegment[]>([])
   const [transcriptLoading, setTranscriptLoading] = useState(false)
   const transcriptLoadedForRef = useRef<string | null>(null)
@@ -83,8 +43,8 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
   const saveTimerRef = useRef<number | null>(null)
   const lastLoadedIdRef = useRef<string | null>(null)
   const isHydratingDraftsRef = useRef(false)
-  const transcriptMenuRef = useRef<HTMLDivElement | null>(null)
 
+  // Hydrate drafts when a note is selected
   useEffect(() => {
     if (!selected) {
       lastLoadedIdRef.current = null
@@ -92,37 +52,43 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
       setDraftTitle('')
       setDraftFolderId('')
       setDraftNote('')
-      setDraftEnhanced('')
-      setTab('original')
+      setTab('notes')
+      setOverview(null)
+      setOverviewLoading(false)
       setTranscriptOpen(false)
       return
     }
     if (lastLoadedIdRef.current === selected.id) return
     lastLoadedIdRef.current = selected.id
-    // Prevent autosave from firing due to draft hydration when switching selection.
     isHydratingDraftsRef.current = true
     setDraftTitle(selected.title)
     setDraftFolderId(selected.folderId ?? '')
     setDraftNote(selected.noteMarkdown)
-    setDraftEnhanced(selected.aiEnhancedMarkdown)
     setEnhanceError(null)
 
-    // If enhanced doesn't exist on this note, keep user on original.
-    if (!selected.aiEnhancedMarkdown?.trim() && tab === 'enhanced') {
-      setTab('original')
+    // Parse existing overview if available
+    if (selected.overviewJson) {
+      try {
+        const parsed = JSON.parse(selected.overviewJson) as OverviewData
+        setOverview(parsed)
+      } catch {
+        setOverview(null)
+      }
+    } else {
+      setOverview(null)
     }
-  }, [selected, tab])
+  }, [selected])
 
+  // Close folder picker on outside click / escape
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
-      if (!transcriptMenuRef.current) return
-      if (!transcriptMenuRef.current.contains(event.target as Node)) {
-        setTranscriptOpen(false)
+      if (folderPickerRef.current && !folderPickerRef.current.contains(event.target as Node)) {
+        setFolderPickerOpen(false)
       }
     }
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setTranscriptOpen(false)
+        setFolderPickerOpen(false)
       }
     }
 
@@ -134,42 +100,30 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
     }
   }, [])
 
+  // Load transcript when sidebar opens
   useEffect(() => {
     if (!transcriptOpen || !selectedId) return
     if (transcriptLoadedForRef.current === selectedId) return
     transcriptLoadedForRef.current = selectedId
     setTranscriptLoading(true)
     void getTranscriptSegments(selectedId)
-      .then(({ speakers, segments }) => {
-        setTranscriptSpeakers(speakers)
-        setTranscriptSegments(segments)
-      })
-      .catch(() => {
-        setTranscriptSpeakers([])
-        setTranscriptSegments([])
-      })
+      .then(({ segments }) => { setTranscriptSegments(segments) })
+      .catch(() => { setTranscriptSegments([]) })
       .finally(() => setTranscriptLoading(false))
   }, [transcriptOpen, selectedId])
 
-  // Reset transcript cache when note changes
+  // Reset transcript when note changes
   useEffect(() => {
     transcriptLoadedForRef.current = null
     setTranscriptSegments([])
-    setTranscriptSpeakers([])
   }, [selectedId])
 
-  const handleSpeakerUpdated = useCallback((speakerId: string, updates: { label?: string; color?: string }) => {
-    setTranscriptSpeakers((prev) =>
-      prev.map((s) => (s.id === speakerId ? { ...s, ...updates } : s)),
-    )
-  }, [])
-
+  // Auto-save with debounce
   const scheduleSave = useCallback(
     (patch: {
       title: string
       folderId?: string
       noteMarkdown: string
-      aiEnhancedMarkdown: string
     }) => {
       if (!selectedId) return
       if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
@@ -181,16 +135,29 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
           if (!updated) return
           replaceNote(updated)
         })
+
+        // Schedule overview regeneration 3s after save
+        if (overviewTimerRef.current) window.clearTimeout(overviewTimerRef.current)
+        overviewTimerRef.current = window.setTimeout(() => {
+          if (patch.noteMarkdown.trim()) {
+            setOverviewLoading(true)
+            void generateOverview(selectedId)
+              .then(({ note, overview: ov }) => {
+                setOverview(ov)
+                replaceNote(note)
+              })
+              .catch(() => { /* silently fail */ })
+              .finally(() => setOverviewLoading(false))
+          }
+        }, 3000)
       }, 400)
     },
     [optimisticPatch, replaceNote, selectedId, userId],
   )
 
+  // Trigger save on draft changes
   useEffect(() => {
     if (!selectedId) return
-    // Important: when switching selection, `selectedId` updates before draft hydration runs.
-    // If we save during that gap, we would write the *previous note's drafts* into the
-    // newly selected note, bumping `updatedAt` and re-sorting the list.
     if (lastLoadedIdRef.current !== selectedId) return
     if (isHydratingDraftsRef.current) {
       isHydratingDraftsRef.current = false
@@ -200,34 +167,32 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
       title: draftTitle,
       folderId: draftFolderId || '',
       noteMarkdown: draftNote,
-      aiEnhancedMarkdown: draftEnhanced,
     })
-  }, [draftTitle, draftFolderId, draftNote, draftEnhanced, scheduleSave, selectedId])
+  }, [draftTitle, draftFolderId, draftNote, scheduleSave, selectedId])
 
-  const handleDelete = useCallback(async () => {
-    if (!selectedId) return
-    await deleteById(selectedId)
-  }, [deleteById, selectedId])
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (overviewTimerRef.current) window.clearTimeout(overviewTimerRef.current)
+    }
+  }, [])
 
+  // Enhance: save version, overwrite note in-place
   const handleEnhance = useCallback(async () => {
     if (!selectedId) return
     setIsEnhancing(true)
     setEnhanceError(null)
     try {
-      const enhanced = await enhanceNote({
-        title: draftTitle,
-        noteMarkdown: draftNote,
-      })
-      setDraftEnhanced(enhanced)
-      await updateNote(userId, selectedId, { aiEnhancedMarkdown: enhanced })
-      optimisticPatch(selectedId, { aiEnhancedMarkdown: enhanced })
-      setTab('enhanced')
+      const { note } = await enhanceNote(selectedId)
+      isHydratingDraftsRef.current = true
+      setDraftNote(note.noteMarkdown)
+      replaceNote(note)
     } catch (error) {
       setEnhanceError(error instanceof Error ? error.message : 'Failed to enhance note')
     } finally {
       setIsEnhancing(false)
     }
-  }, [draftNote, draftTitle, optimisticPatch, selectedId, userId])
+  }, [replaceNote, selectedId])
 
   if (!selectedId) {
     return (
@@ -237,116 +202,107 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
     )
   }
 
-  return (
-    <div className="h-full">
-      <div className="relative flex h-full min-h-0 flex-col rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-        <div className="flex items-center gap-2 border-b border-neutral-200 px-2.5 py-2 dark:border-neutral-800">
-          {editingTitle ? (
-            <Input
-              ref={titleInputRef}
-              value={draftTitle}
-              onChange={(e) => setDraftTitle(e.target.value)}
-              onBlur={() => setEditingTitle(false)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === 'Escape') {
-                  e.preventDefault()
-                  setEditingTitle(false)
-                }
-              }}
-              placeholder="Title…"
-              className="h-9 border-neutral-200 bg-neutral-50 text-neutral-900 placeholder:text-neutral-400 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-50 dark:placeholder:text-neutral-500"
-            />
-          ) : (
-            <button
-              type="button"
-              disabled={!selectedId}
-              onClick={() => {
-                setEditingTitle(true)
-                setTimeout(() => titleInputRef.current?.select(), 0)
-              }}
-              className="h-9 min-w-0 flex-1 truncate rounded-md px-3 text-left text-sm font-medium text-neutral-900 transition-colors hover:bg-neutral-100 dark:text-neutral-50 dark:hover:bg-neutral-800"
-            >
-              {draftTitle || 'Untitled note'}
-            </button>
-          )}
-          <Select
-            value={draftFolderId ? draftFolderId : UNFILED_VALUE}
-            onValueChange={(v) => setDraftFolderId(v === UNFILED_VALUE ? '' : v)}
-            disabled={!selectedId}
-          >
-            <SelectTrigger
-              className="h-9 w-40 border-neutral-200 bg-neutral-50 text-neutral-900 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-50"
-              style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}
-            >
-              <SelectValue placeholder="Folder" />
-            </SelectTrigger>
-            <SelectContent className="border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-              <SelectItem value={UNFILED_VALUE}>Unfiled</SelectItem>
-              {folders.map((f) => (
-                <SelectItem key={f.id} value={f.id}>
-                  {f.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="flex items-center gap-1 rounded-md bg-neutral-100 p-1 dark:bg-neutral-950">
-            <div ref={transcriptMenuRef} className="relative">
-              <Button
-                type="button"
-                variant="ghost"
-                className="h-7 rounded-md px-3 text-xs"
-                onClick={() => setTranscriptOpen((open) => !open)}
-                style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}
-              >
-                Transcript
-              </Button>
+  const tabs: { key: Tab; label: string; indicator?: boolean }[] = [
+    { key: 'notes', label: 'Notes' },
+    { key: 'overview', label: 'Overview', indicator: overviewLoading },
+  ]
 
-                {selectedId && transcriptOpen ? (
-                <div
-                  className="absolute right-0 top-[calc(100%+8px)] z-30 w-[420px] rounded-lg border border-neutral-200 bg-white shadow-xl dark:border-neutral-800 dark:bg-neutral-900"
-                  style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}
-                >
-                  <div className="border-b border-neutral-200 px-3 py-2 text-xs font-medium text-neutral-600 dark:border-neutral-800 dark:text-neutral-300">
-                    Transcript
-                  </div>
-                  <InfoBanner className="rounded-none border-0 border-b border-violet-400/40">
-                    The transcript may show repeated sentences without headphones, but your final notes will be unaffected. For the best experience, use headphones.
-                  </InfoBanner>
-                  <div className="h-44 w-full overflow-y-auto p-2.5 text-sm text-neutral-900 dark:text-neutral-50">
-                    <SavedTranscriptView
-                      speakers={transcriptSpeakers}
-                      segments={transcriptSegments}
-                      loading={transcriptLoading}
-                      onSpeakerUpdated={handleSpeakerUpdated}
-                      theme="light"
-                    />
-                  </div>
-                </div>
-              ) : null}
-            </div>
-            {draftEnhanced.trim() ? (
-              <Button
-                type="button"
-                variant="ghost"
-                className={`h-7 rounded-md px-3 text-xs ${tab === 'enhanced' ? 'bg-white dark:bg-neutral-800' : ''}`}
-                onClick={() => setTab((current) => (current === 'enhanced' ? 'original' : 'enhanced'))}
-                style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}
-              >
-                Enhanced
-              </Button>
-            ) : null}
-          </div>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="h-9 w-9 rounded-md border border-neutral-200 bg-neutral-50 text-neutral-800 hover:bg-neutral-100 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-200 dark:hover:bg-neutral-800"
-            onClick={() => void handleDelete()}
-            title="Delete note"
+  return (
+    <div className="flex h-full min-h-0 gap-2">
+
+      {/* ── Main panel ── */}
+      <div className="relative flex min-w-0 flex-1 flex-col rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+
+        {/* Title row */}
+        <div className="flex items-center gap-2 border-b border-neutral-200 px-3 py-2 dark:border-neutral-800">
+          <input
+            value={draftTitle}
+            onChange={(e) => setDraftTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === 'Escape') {
+                e.preventDefault()
+                ;(e.target as HTMLInputElement).blur()
+              }
+            }}
+            placeholder="Untitled note"
             disabled={!selectedId}
+            className="h-9 min-w-0 flex-1 truncate bg-transparent text-sm font-medium text-neutral-900 outline-none placeholder:text-neutral-400 dark:text-neutral-50 dark:placeholder:text-neutral-500"
+          />
+          <div ref={folderPickerRef} className="relative" style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={!selectedId}
+              onClick={() => setFolderPickerOpen((v) => !v)}
+              className="h-7 gap-1.5 rounded-md px-3 text-xs text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+            >
+              <Folder className="h-3.5 w-3.5" />
+              <span>{draftFolderId ? (folders.find((f) => f.id === draftFolderId)?.name ?? 'Folder') : 'No folder'}</span>
+            </Button>
+            {folderPickerOpen && (
+              <div className="absolute right-0 top-[calc(100%+4px)] z-30 min-w-[160px] rounded-lg border border-neutral-200 bg-white py-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-800">
+                <div className="px-3 py-1.5 text-xs text-neutral-400 dark:text-neutral-500">Add to folder</div>
+                {[{ id: '', name: 'No folder' }, ...folders].map((f, i) => {
+                  const active = (f.id === '' && !draftFolderId) || f.id === draftFolderId
+                  return (
+                    <Fragment key={f.id || '__none__'}>
+                      {i === 1 && folders.length > 0 && (
+                        <div className="my-1 border-t border-neutral-100 dark:border-neutral-700" />
+                      )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => { setDraftFolderId(f.id); setFolderPickerOpen(false) }}
+                        className="mx-1 h-8 w-[calc(100%-8px)] justify-start gap-2 rounded-md px-3 text-sm font-normal text-neutral-800 hover:bg-neutral-100 dark:text-neutral-100 dark:hover:bg-neutral-700"
+                      >
+                        <span className="w-3.5">{active ? <Check className="h-3.5 w-3.5" /> : null}</span>
+                        <Folder className="h-3.5 w-3.5 text-neutral-400 dark:text-neutral-500" />
+                        {f.name}
+                      </Button>
+                    </Fragment>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Tab row */}
+        <div className="flex items-center gap-0.5 border-b border-neutral-200 px-3 py-1.5 dark:border-neutral-800">
+          <div className="flex flex-1 items-center gap-0.5">
+            {tabs.map(({ key, label, indicator }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setTab(key)}
+                className={
+                  tab === key
+                    ? 'flex items-center gap-1.5 rounded-full bg-neutral-900 px-3 py-1 text-xs font-medium text-white dark:bg-neutral-700 dark:text-white'
+                    : 'flex items-center gap-1.5 rounded-full px-3 py-1 text-xs text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200'
+                }
+              >
+                {label}
+                {indicator && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-violet-500 animate-pulse" />
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Transcript toggle */}
+          <button
+            type="button"
+            onClick={() => setTranscriptOpen((v) => !v)}
+            title={transcriptOpen ? 'Hide transcript' : 'Show transcript'}
+            className={
+              transcriptOpen
+                ? 'flex items-center gap-1.5 rounded-full bg-neutral-900 px-3 py-1 text-xs font-medium text-white dark:bg-neutral-700 dark:text-white'
+                : 'flex items-center gap-1.5 rounded-full px-3 py-1 text-xs text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200'
+            }
           >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+            <FileText className="h-3 w-3" />
+            Transcript
+          </button>
         </div>
 
         {enhanceError ? (
@@ -355,8 +311,9 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
           </div>
         ) : null}
 
+        {/* Tab panels */}
         <div className="flex-1 min-h-0 overflow-hidden">
-          {tab === 'original' ? (
+          {tab === 'notes' && (
             <MarkdownEditor
               markdown={draftNote}
               onChange={setDraftNote}
@@ -366,39 +323,61 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
               className="h-full dashboard-editor"
               noteId={selectedId}
             />
-          ) : (
-            <div className="h-full overflow-y-auto p-2.5 sidebar-scrollbar">
-              {draftEnhanced.trim() ? (
-                <Response>{draftEnhanced}</Response>
-              ) : (
-                <div className="rounded-md border border-neutral-200 p-2.5 text-sm text-neutral-600 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-400">
-                  Click “Enhance notes” to generate a cleaned-up, shareable doc.
-                </div>
-              )}
-            </div>
           )}
-
+          {tab === 'overview' && (
+            <OverviewPanel
+              overview={overview}
+              loading={overviewLoading}
+              hasContent={Boolean(draftNote.trim())}
+            />
+          )}
         </div>
 
-        {selectedId && tab === 'original' ? (
+        {/* Enhance button — only on Notes tab */}
+        {selectedId && tab === 'notes' ? (
           <div className="pointer-events-none absolute bottom-2.5 left-1/2 z-20 -translate-x-1/2">
-            <Button
-              type="button"
-              className="pointer-events-auto border-0 bg-violet-600 text-white shadow-md hover:bg-violet-700 focus-visible:ring-violet-400"
-              onClick={() => void handleEnhance()}
-              disabled={!selectedId || isEnhancing}
-            >
-              {isEnhancing ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="mr-2 h-4 w-4" />
-              )}
-              Enhance notes
-            </Button>
+            <div className="pointer-events-auto flex items-center gap-1.5">
+              <Button
+                type="button"
+                className="border-0 bg-violet-600 text-white shadow-md hover:bg-violet-700 focus-visible:ring-violet-400"
+                onClick={() => void handleEnhance()}
+                disabled={!selectedId || isEnhancing || !draftNote.trim()}
+              >
+                {isEnhancing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                Enhance
+              </Button>
+            </div>
           </div>
         ) : null}
 
       </div>
+
+      {/* ── Transcript sidebar ── */}
+      {transcriptOpen && (
+        <div className="flex w-80 flex-shrink-0 flex-col rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+          <div className="flex items-center justify-between border-b border-neutral-200 px-3 py-2 dark:border-neutral-800">
+            <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">Transcript</span>
+            <button
+              type="button"
+              onClick={() => setTranscriptOpen(false)}
+              className="rounded p-0.5 text-neutral-400 hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto p-2.5 sidebar-scrollbar">
+            <InfoBanner className="mb-2">
+              The transcript may show repeated sentences without headphones, but your final notes will be unaffected. For the best experience, use headphones.
+            </InfoBanner>
+            <SavedTranscriptView
+              segments={transcriptSegments}
+              loading={transcriptLoading}
+              theme="light"
+            />
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

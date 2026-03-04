@@ -17,40 +17,6 @@ func NewTranscriptRepository(db *database.DB) *TranscriptRepository {
 	return &TranscriptRepository{db: db}
 }
 
-func (r *TranscriptRepository) UpsertSpeaker(speaker *models.TranscriptSpeaker) (*models.TranscriptSpeaker, error) {
-	query := `
-		INSERT INTO transcript_speakers (note_id, user_id, speaker_key, channel, label, color)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (note_id, speaker_key, channel) DO UPDATE SET label = EXCLUDED.label, color = EXCLUDED.color
-		RETURNING id, note_id, user_id, speaker_key, channel, label, color, created_at
-	`
-
-	var result models.TranscriptSpeaker
-	err := r.db.QueryRow(
-		query,
-		speaker.NoteID,
-		speaker.UserID,
-		speaker.SpeakerKey,
-		speaker.Channel,
-		speaker.Label,
-		speaker.Color,
-	).Scan(
-		&result.ID,
-		&result.NoteID,
-		&result.UserID,
-		&result.SpeakerKey,
-		&result.Channel,
-		&result.Label,
-		&result.Color,
-		&result.CreatedAt,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to upsert speaker: %w", err)
-	}
-
-	return &result, nil
-}
-
 func (r *TranscriptRepository) BatchInsertSegments(segments []*models.TranscriptSegment) error {
 	if len(segments) == 0 {
 		return nil
@@ -65,11 +31,11 @@ func (r *TranscriptRepository) BatchInsertSegments(segments []*models.Transcript
 			"($%d, $%d, $%d, $%d, $%d, $%d)",
 			base+1, base+2, base+3, base+4, base+5, base+6,
 		))
-		args = append(args, seg.NoteID, seg.SpeakerID, seg.Text, seg.StartTime, seg.EndTime, seg.SegmentIndex)
+		args = append(args, seg.NoteID, seg.Channel, seg.Text, seg.StartTime, seg.EndTime, seg.SegmentIndex)
 	}
 
 	query := fmt.Sprintf(
-		`INSERT INTO transcript_segments (note_id, speaker_id, text, start_time, end_time, segment_index) VALUES %s`,
+		`INSERT INTO transcript_segments (note_id, channel, text, start_time, end_time, segment_index) VALUES %s`,
 		strings.Join(valueStrings, ", "),
 	)
 
@@ -81,38 +47,12 @@ func (r *TranscriptRepository) BatchInsertSegments(segments []*models.Transcript
 	return nil
 }
 
-func (r *TranscriptRepository) GetSpeakersByNote(noteID, userID string) ([]*models.TranscriptSpeaker, error) {
-	query := `
-		SELECT id, note_id, user_id, speaker_key, channel, label, color, created_at
-		FROM transcript_speakers
-		WHERE note_id = $1 AND user_id = $2
-		ORDER BY speaker_key
-	`
-
-	rows, err := r.db.Query(query, noteID, userID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get speakers: %w", err)
-	}
-	defer rows.Close()
-
-	var speakers []*models.TranscriptSpeaker
-	for rows.Next() {
-		var s models.TranscriptSpeaker
-		if err := rows.Scan(&s.ID, &s.NoteID, &s.UserID, &s.SpeakerKey, &s.Channel, &s.Label, &s.Color, &s.CreatedAt); err != nil {
-			return nil, fmt.Errorf("failed to scan speaker: %w", err)
-		}
-		speakers = append(speakers, &s)
-	}
-
-	return speakers, rows.Err()
-}
-
 func (r *TranscriptRepository) GetSegmentsByNote(noteID, userID string) ([]*models.TranscriptSegment, error) {
 	query := `
-		SELECT s.id, s.note_id, s.speaker_id, s.text, s.start_time, s.end_time, s.segment_index, s.created_at
+		SELECT s.id, s.note_id, s.channel, s.text, s.start_time, s.end_time, s.segment_index, s.created_at
 		FROM transcript_segments s
-		JOIN transcript_speakers sp ON sp.id = s.speaker_id
-		WHERE s.note_id = $1 AND sp.user_id = $2
+		JOIN notes n ON n.id = s.note_id
+		WHERE s.note_id = $1 AND n.user_id = $2
 		ORDER BY s.segment_index
 	`
 
@@ -126,7 +66,7 @@ func (r *TranscriptRepository) GetSegmentsByNote(noteID, userID string) ([]*mode
 	for rows.Next() {
 		var seg models.TranscriptSegment
 		if err := rows.Scan(
-			&seg.ID, &seg.NoteID, &seg.SpeakerID, &seg.Text,
+			&seg.ID, &seg.NoteID, &seg.Channel, &seg.Text,
 			&seg.StartTime, &seg.EndTime, &seg.SegmentIndex, &seg.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan segment: %w", err)
@@ -135,30 +75,6 @@ func (r *TranscriptRepository) GetSegmentsByNote(noteID, userID string) ([]*mode
 	}
 
 	return segments, rows.Err()
-}
-
-func (r *TranscriptRepository) UpdateSpeaker(speakerID, userID, label, color string) error {
-	query := `
-		UPDATE transcript_speakers
-		SET label = CASE WHEN $3 = '' THEN label ELSE $3 END,
-		    color = CASE WHEN $4 = '' THEN color ELSE $4 END
-		WHERE id = $1 AND user_id = $2
-	`
-
-	res, err := r.db.Exec(query, speakerID, userID, label, color)
-	if err != nil {
-		return fmt.Errorf("failed to update speaker: %w", err)
-	}
-
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to check rows affected: %w", err)
-	}
-	if affected == 0 {
-		return fmt.Errorf("speaker not found")
-	}
-
-	return nil
 }
 
 func (r *TranscriptRepository) SearchSegments(userID, query string, limit int) ([]*models.TranscriptSegment, error) {
@@ -174,10 +90,10 @@ func (r *TranscriptRepository) SearchSegments(userID, query string, limit int) (
 	}
 
 	sqlQuery := `
-		SELECT s.id, s.note_id, s.speaker_id, s.text, s.start_time, s.end_time, s.segment_index, s.created_at
+		SELECT s.id, s.note_id, s.channel, s.text, s.start_time, s.end_time, s.segment_index, s.created_at
 		FROM transcript_segments s
-		JOIN transcript_speakers sp ON sp.id = s.speaker_id
-		WHERE sp.user_id = $1
+		JOIN notes n ON n.id = s.note_id
+		WHERE n.user_id = $1
 			AND to_tsvector('english', s.text) @@ plainto_tsquery('english', $2)
 		ORDER BY s.created_at DESC
 		LIMIT $3
@@ -193,7 +109,7 @@ func (r *TranscriptRepository) SearchSegments(userID, query string, limit int) (
 	for rows.Next() {
 		var seg models.TranscriptSegment
 		if err := rows.Scan(
-			&seg.ID, &seg.NoteID, &seg.SpeakerID, &seg.Text,
+			&seg.ID, &seg.NoteID, &seg.Channel, &seg.Text,
 			&seg.StartTime, &seg.EndTime, &seg.SegmentIndex, &seg.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan search segment: %w", err)

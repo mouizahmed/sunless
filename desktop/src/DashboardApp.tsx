@@ -1,4 +1,6 @@
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
+import { ChatProvider } from '@/contexts/ChatContext'
+import ChatWidget from '@/components/ChatWidget'
 import DashboardWorkspace from '@/components/DashboardWorkspace'
 import DashboardTopBar from '@/components/DashboardTopBar'
 import DashboardSidebar from '@/components/DashboardSidebar'
@@ -79,9 +81,12 @@ function DashboardContent() {
 export default function DashboardApp() {
   return (
     <AuthProvider>
-      <SidebarProvider defaultOpen={true}>
-        <DashboardContent />
-      </SidebarProvider>
+      <ChatProvider>
+        <SidebarProvider defaultOpen={true}>
+          <DashboardContent />
+          <ChatWidget variant="dashboard" />
+        </SidebarProvider>
+      </ChatProvider>
     </AuthProvider>
   )
 }

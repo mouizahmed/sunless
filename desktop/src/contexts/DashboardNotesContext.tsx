@@ -5,7 +5,7 @@ import type { FolderRecord } from '@/types/folder'
 import { createFolder as createFolderApi, deleteFolder as deleteFolderApi, listFolders } from '@/lib/folders-client'
 import { createNote, deleteNote, listNotesPage } from '@/lib/notes-client'
 
-type Patch = Partial<Pick<NoteRecord, 'title' | 'folderId' | 'noteMarkdown' | 'aiEnhancedMarkdown'>>
+type Patch = Partial<Pick<NoteRecord, 'title' | 'folderId' | 'noteMarkdown'>>
 
 type DashboardNotesContextType = {
   isLoading: boolean

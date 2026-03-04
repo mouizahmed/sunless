@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent } from 'react'
 import { Camera, Loader2 } from 'lucide-react'
+import AISelectionPopover from './AISelectionPopover'
 import {
   MDXEditor,
   headingsPlugin,
@@ -51,9 +52,11 @@ function ToolbarContents() {
       <Separator />
       <BlockTypeSelect />
       <Separator />
-      <CreateLink />
-      <InsertTable />
-      <InsertThematicBreak />
+      <div role="group" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+        <CreateLink />
+        <InsertTable />
+        <InsertThematicBreak />
+      </div>
     </>
   )
 }
@@ -84,6 +87,7 @@ function getImageFiles(dataTransfer: DataTransfer): File[] {
 
 function MarkdownEditorInner({ markdown, onChange, placeholder, theme = 'auto', showToolbar = false, className, noteId }: MarkdownEditorProps) {
   const editorRef = useRef<MDXEditorMethods>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const isInternalChangeRef = useRef(false)
   const hasMountedRef = useRef(false)
   const isDark = useDarkMode(theme)
@@ -197,8 +201,16 @@ function MarkdownEditorInner({ markdown, onChange, placeholder, theme = 'auto', 
     onChange(value)
   }
 
+  const getMarkdown = useCallback(() => editorRef.current?.getMarkdown() ?? '', [])
+  const handleSetMarkdown = useCallback((md: string) => {
+    if (!editorRef.current) return
+    isInternalChangeRef.current = true
+    editorRef.current.setMarkdown(md)
+  }, [])
+
   return (
     <div
+      ref={containerRef}
       onDragEnter={noteId ? handleDragEnter : undefined}
       onDragLeave={noteId ? handleDragLeave : undefined}
       onDrop={noteId ? handleDrop : undefined}
@@ -242,6 +254,14 @@ function MarkdownEditorInner({ markdown, onChange, placeholder, theme = 'auto', 
           </div>
         </div>
       )}
+
+      <AISelectionPopover
+        editorContainerRef={containerRef}
+        getMarkdown={getMarkdown}
+        setMarkdown={handleSetMarkdown}
+        onChange={onChange}
+        noteId={noteId}
+      />
     </div>
   )
 }

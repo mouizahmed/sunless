@@ -37,8 +37,6 @@ export type LiveTranscriptSegment = {
   id: string
   text: string
   createdAt: number
-  speaker?: 'user' | 'assistant' | 'system' | string
-  speakerLabel?: string
   pending?: boolean
   channel?: number
   startTime?: number

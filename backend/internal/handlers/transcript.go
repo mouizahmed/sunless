@@ -24,19 +24,10 @@ func NewTranscriptHandler(transcriptRepo *repository.TranscriptRepository, noteR
 }
 
 type SaveSegmentsRequest struct {
-	Speakers []SaveSpeakerPayload `json:"speakers"`
 	Segments []SaveSegmentPayload `json:"segments"`
 }
 
-type SaveSpeakerPayload struct {
-	SpeakerKey int    `json:"speaker_key"`
-	Channel    int    `json:"channel"`
-	Label      string `json:"label"`
-	Color      string `json:"color"`
-}
-
 type SaveSegmentPayload struct {
-	SpeakerKey   int      `json:"speaker_key"`
 	Channel      int      `json:"channel"`
 	Text         string   `json:"text"`
 	StartTime    *float64 `json:"start_time,omitempty"`
@@ -74,44 +65,11 @@ func (h *TranscriptHandler) SaveSegments(c *gin.Context) {
 		return
 	}
 
-	// Upsert all speakers and build lookup map
-	type speakerLookupKey struct {
-		SpeakerKey int
-		Channel    int
-	}
-	speakerMap := make(map[speakerLookupKey]string)
-
-	for _, sp := range req.Speakers {
-		speaker := &models.TranscriptSpeaker{
-			NoteID:     noteID,
-			UserID:     userID,
-			SpeakerKey: sp.SpeakerKey,
-			Channel:    sp.Channel,
-			Label:      sp.Label,
-			Color:      sp.Color,
-		}
-		upserted, err := h.transcriptRepo.UpsertSpeaker(speaker)
-		if err != nil {
-			log.Printf("transcript: failed to upsert speaker for note %s: %v", noteID, err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save speakers"})
-			return
-		}
-		speakerMap[speakerLookupKey{SpeakerKey: sp.SpeakerKey, Channel: sp.Channel}] = upserted.ID
-	}
-
-	// Build segments with resolved speaker IDs
 	segments := make([]*models.TranscriptSegment, 0, len(req.Segments))
 	for _, seg := range req.Segments {
-		key := speakerLookupKey{SpeakerKey: seg.SpeakerKey, Channel: seg.Channel}
-		speakerID, ok := speakerMap[key]
-		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "segment references unknown speaker"})
-			return
-		}
-
 		segments = append(segments, &models.TranscriptSegment{
 			NoteID:       noteID,
-			SpeakerID:    speakerID,
+			Channel:      seg.Channel,
 			Text:         seg.Text,
 			StartTime:    seg.StartTime,
 			EndTime:      seg.EndTime,
@@ -141,13 +99,6 @@ func (h *TranscriptHandler) GetSegments(c *gin.Context) {
 		return
 	}
 
-	speakers, err := h.transcriptRepo.GetSpeakersByNote(noteID, userID)
-	if err != nil {
-		log.Printf("transcript: failed to get speakers for note %s: %v", noteID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load transcript"})
-		return
-	}
-
 	segments, err := h.transcriptRepo.GetSegmentsByNote(noteID, userID)
 	if err != nil {
 		log.Printf("transcript: failed to get segments for note %s: %v", noteID, err)
@@ -155,59 +106,13 @@ func (h *TranscriptHandler) GetSegments(c *gin.Context) {
 		return
 	}
 
-	if speakers == nil {
-		speakers = []*models.TranscriptSpeaker{}
-	}
 	if segments == nil {
 		segments = []*models.TranscriptSegment{}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"speakers": speakers,
 		"segments": segments,
 	})
-}
-
-func (h *TranscriptHandler) UpdateSpeaker(c *gin.Context) {
-	userID, err := getUserID(c)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		return
-	}
-
-	speakerID := strings.TrimSpace(c.Param("speakerID"))
-	if speakerID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "speaker id is required"})
-		return
-	}
-
-	var req struct {
-		Label string `json:"label"`
-		Color string `json:"color"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request payload"})
-		return
-	}
-
-	label := strings.TrimSpace(req.Label)
-	color := strings.TrimSpace(req.Color)
-	if label == "" && color == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "label or color is required"})
-		return
-	}
-
-	if err := h.transcriptRepo.UpdateSpeaker(speakerID, userID, label, color); err != nil {
-		if err.Error() == "speaker not found" {
-			c.JSON(http.StatusNotFound, gin.H{"error": "speaker not found"})
-			return
-		}
-		log.Printf("transcript: failed to update speaker %s: %v", speakerID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update speaker"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
 func (h *TranscriptHandler) SearchSegments(c *gin.Context) {
