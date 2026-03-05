@@ -1,4 +1,4 @@
-import type { NoteRecord, OverviewData, NoteVersion } from '@/types/note'
+import type { NoteRecord, NoteVersion } from '@/types/note'
 import { auth } from '@/config/firebase'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api'
@@ -9,7 +9,6 @@ type ApiNote = {
   folder_id?: string | null
   title: string
   note_markdown: string
-  overview_json: string
   created_at: string
   updated_at: string
 }
@@ -20,7 +19,6 @@ function toNoteRecord(note: ApiNote): NoteRecord {
     title: note.title,
     folderId: note.folder_id ?? undefined,
     noteMarkdown: note.note_markdown ?? '',
-    overviewJson: note.overview_json ?? '',
     createdAt: Date.parse(note.created_at),
     updatedAt: Date.parse(note.updated_at),
   }
@@ -139,7 +137,7 @@ export async function updateNote(
     },
     body: JSON.stringify({
       title: patch.title,
-      folder_id: patch.folderId,
+      folder_id: 'folderId' in patch ? (patch.folderId ?? '') : undefined,
       note_markdown: patch.noteMarkdown,
     }),
   })
@@ -164,26 +162,6 @@ export async function enhanceNote(noteId: string): Promise<{ note: NoteRecord; v
   return { note: toNoteRecord(payload.note), versionId: payload.version_id ?? '' }
 }
 
-export async function generateOverview(noteId: string): Promise<{ note: NoteRecord; overview: OverviewData }> {
-  const idToken = await getIdToken()
-  const payload = await fetchJson<{ note?: ApiNote; overview?: OverviewData }>(
-    `${API_BASE_URL}/notes/${noteId}/overview`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        Authorization: `Bearer ${idToken}`,
-      },
-      body: '{}',
-    },
-  )
-  if (!payload.note) throw new Error('Failed to generate overview')
-  return {
-    note: toNoteRecord(payload.note),
-    overview: payload.overview ?? { summary: '', action_items: [], email_draft: '', message_draft: '' },
-  }
-}
 
 export async function listVersions(noteId: string): Promise<NoteVersion[]> {
   const idToken = await getIdToken()

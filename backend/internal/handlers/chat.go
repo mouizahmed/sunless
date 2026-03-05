@@ -12,7 +12,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/mouizahmed/justscribe-backend/internal/ai"
 	"github.com/mouizahmed/justscribe-backend/internal/models"
+	"github.com/mouizahmed/justscribe-backend/internal/prompts"
+	"github.com/mouizahmed/justscribe-backend/internal/queue"
 	"github.com/mouizahmed/justscribe-backend/internal/repository"
+	"github.com/mouizahmed/justscribe-backend/internal/retrieval"
 )
 
 type ChatHandler struct {
@@ -20,6 +23,8 @@ type ChatHandler struct {
 	msgRepo      *repository.MessageRepository
 	aiClient     *ai.Client
 	toolExecutor *ai.ToolExecutor
+	retriever    *retrieval.Retriever
+	queue        *queue.Queue
 }
 
 func NewChatHandler(
@@ -27,12 +32,16 @@ func NewChatHandler(
 	msgRepo *repository.MessageRepository,
 	aiClient *ai.Client,
 	toolExecutor *ai.ToolExecutor,
+	retriever *retrieval.Retriever,
+	q *queue.Queue,
 ) *ChatHandler {
 	return &ChatHandler{
 		convRepo:     convRepo,
 		msgRepo:      msgRepo,
 		aiClient:     aiClient,
 		toolExecutor: toolExecutor,
+		retriever:    retriever,
+		queue:        q,
 	}
 }
 
@@ -41,7 +50,8 @@ type CreateConversationRequest struct {
 }
 
 type SendMessageRequest struct {
-	Content string `json:"content"`
+	Content       string  `json:"content"`
+	ContextNoteID *string `json:"context_note_id,omitempty"`
 }
 
 func (h *ChatHandler) CreateConversation(c *gin.Context) {
@@ -216,19 +226,7 @@ func (h *ChatHandler) GetMessages(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"messages": display})
 }
 
-const chatSystemPrompt = `You are a helpful AI assistant integrated into Sunless, a note-taking and meeting transcription app.
-
-You can help users find and explore their personal notes and meeting transcripts. When they ask questions, search for relevant information and provide helpful, conversational answers.
-
-Guidelines:
-- Be natural and conversational
-- Search notes and transcripts to answer user questions
-- Cite specific notes by their title when referencing them
-- Format responses in markdown when appropriate
-- If you can't find something, let them know in a friendly way
-- If asked about system internals, database structure, or how you work, politely redirect: "I'm here to help you explore your notes and transcripts. What would you like to find?"
-
-You only have access to this user's personal notes and transcripts. Focus on helping them discover insights from their own content.`
+// chatSystemPrompt is now centralised in prompts package.
 
 func (h *ChatHandler) SendMessage(c *gin.Context) {
 	userID, err := getUserID(c)
@@ -284,14 +282,24 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 
 	contextMessages, needsSummary := ai.BuildSlidingContext(conv.Summary, allMessages, 80000)
 
-	// Set SSE headers
+	// Set SSE headers immediately so the client connection is established
+	// before the RAG embedding lookup (~500ms) begins.
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
 	c.Header("X-Accel-Buffering", "no")
+	c.Writer.WriteHeader(http.StatusOK)
+	c.Writer.Flush()
+
+	// Retrieve RAG context
+	scope := retrieval.Scope{}
+	if req.ContextNoteID != nil {
+		scope.NoteID = *req.ContextNoteID
+	}
+	ragContext, _ := h.retriever.RetrieveContext(c.Request.Context(), userID, content, scope, 6)
 
 	chatParams := ai.ChatParams{
-		SystemPrompt: chatSystemPrompt + "\n\nCurrent date and time: " + time.Now().Format("2006-01-02 15:04 MST"),
+		SystemPrompt: prompts.ChatSystemWithContext(ragContext) + "\n\nCurrent date and time: " + time.Now().Format("2006-01-02 15:04 MST"),
 		Messages:     contextMessages,
 		Tools:        h.toolExecutor.GetToolDefinitions(),
 	}

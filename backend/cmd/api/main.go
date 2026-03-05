@@ -14,10 +14,14 @@ import (
 	"github.com/mouizahmed/justscribe-backend/internal/auth"
 	"github.com/mouizahmed/justscribe-backend/internal/database"
 	"github.com/mouizahmed/justscribe-backend/internal/handlers"
+	"github.com/mouizahmed/justscribe-backend/internal/memory"
 	"github.com/mouizahmed/justscribe-backend/internal/middleware"
+	"github.com/mouizahmed/justscribe-backend/internal/queue"
 	"github.com/mouizahmed/justscribe-backend/internal/repository"
+	"github.com/mouizahmed/justscribe-backend/internal/retrieval"
 	"github.com/mouizahmed/justscribe-backend/internal/storage"
 	"github.com/mouizahmed/justscribe-backend/internal/utils"
+	"github.com/mouizahmed/justscribe-backend/internal/worker"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -62,7 +66,17 @@ func main() {
 
 	// Initialize AI services
 	aiClient := ai.NewClient()
-	toolExecutor := ai.NewToolExecutor(noteRepo, transcriptRepo, folderRepo, db)
+
+	// Initialize embedder (graceful: nil if OPENAI_API_KEY not set)
+	embedder, _ := memory.NewEmbedder()
+
+	// Initialize Pinecone (graceful: nil if PINECONE_API_KEY not set)
+	pineconeClient, _ := retrieval.NewClient(context.Background())
+
+	// Initialize retriever
+	retriever := retrieval.NewRetriever(embedder, pineconeClient, noteRepo)
+
+	toolExecutor := ai.NewToolExecutor(noteRepo, transcriptRepo, folderRepo, db, retriever)
 
 	// Initialize direct Redis client for OAuth codes
 	redisClient := redis.NewClient(&redis.Options{
@@ -77,6 +91,13 @@ func main() {
 	}
 	defer redisClient.Close()
 
+	// Initialize queue and worker
+	indexQueue := queue.NewQueue(redisClient)
+	w := worker.NewWorker(indexQueue, embedder, pineconeClient, noteRepo, transcriptRepo)
+	workerCtx, cancelWorker := context.WithCancel(context.Background())
+	defer cancelWorker()
+	go w.Start(workerCtx)
+
 	// Initialize handlers
 	oauthHandler := handlers.NewOAuthHandler(userRepo, oauthTokenRepo, redisClient)
 	userHandler := handlers.NewUserHandler(userRepo)
@@ -86,12 +107,12 @@ func main() {
 		log.Fatalf("Failed to initialize B2 client: %v", err)
 	}
 
-	notesHandler := handlers.NewNotesHandler(noteRepo, noteVersionRepo, folderRepo, recordingRepo, b2Client, noteAttachmentRepo, aiClient)
+	notesHandler := handlers.NewNotesHandler(noteRepo, noteVersionRepo, folderRepo, recordingRepo, b2Client, noteAttachmentRepo, aiClient, indexQueue)
 
 	transcriptionHandler := handlers.NewTranscriptionHandler()
-	transcriptHandler := handlers.NewTranscriptHandler(transcriptRepo, noteRepo)
+	transcriptHandler := handlers.NewTranscriptHandler(transcriptRepo, noteRepo, indexQueue)
 	calendarHandler := handlers.NewCalendarHandler(oauthTokenRepo)
-	chatHandler := handlers.NewChatHandler(conversationRepo, messageRepo, aiClient, toolExecutor)
+	chatHandler := handlers.NewChatHandler(conversationRepo, messageRepo, aiClient, toolExecutor, retriever, indexQueue)
 	aiTransformHandler := handlers.NewAITransformHandler(aiClient)
 
 	// Initialize the router
@@ -142,7 +163,6 @@ func main() {
 		authenticated.PATCH("/notes/:noteID", notesHandler.UpdateNote)
 		authenticated.DELETE("/notes/:noteID", notesHandler.DeleteNote)
 		authenticated.POST("/notes/:noteID/enhance", notesHandler.EnhanceNote)
-		authenticated.POST("/notes/:noteID/overview", notesHandler.GenerateOverview)
 		authenticated.GET("/notes/:noteID/versions", notesHandler.ListVersions)
 		authenticated.POST("/notes/:noteID/revert/:versionID", notesHandler.RevertToVersion)
 		authenticated.POST("/notes/:noteID/images", notesHandler.UploadImage)

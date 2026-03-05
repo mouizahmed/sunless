@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"strconv"
@@ -8,18 +9,21 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/mouizahmed/justscribe-backend/internal/models"
+	"github.com/mouizahmed/justscribe-backend/internal/queue"
 	"github.com/mouizahmed/justscribe-backend/internal/repository"
 )
 
 type TranscriptHandler struct {
 	transcriptRepo *repository.TranscriptRepository
 	noteRepo       *repository.NoteRepository
+	queue          *queue.Queue
 }
 
-func NewTranscriptHandler(transcriptRepo *repository.TranscriptRepository, noteRepo *repository.NoteRepository) *TranscriptHandler {
+func NewTranscriptHandler(transcriptRepo *repository.TranscriptRepository, noteRepo *repository.NoteRepository, q *queue.Queue) *TranscriptHandler {
 	return &TranscriptHandler{
 		transcriptRepo: transcriptRepo,
 		noteRepo:       noteRepo,
+		queue:          q,
 	}
 }
 
@@ -81,6 +85,14 @@ func (h *TranscriptHandler) SaveSegments(c *gin.Context) {
 		log.Printf("transcript: failed to batch insert segments for note %s: %v", noteID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save segments"})
 		return
+	}
+
+	if h.queue != nil {
+		go func() {
+			_ = h.queue.Enqueue(context.Background(), queue.Job{
+				Type: queue.JobIndexTranscript, UserID: userID, ID: noteID,
+			})
+		}()
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "saved_count": len(segments)})

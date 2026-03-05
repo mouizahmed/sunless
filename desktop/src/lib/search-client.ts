@@ -10,7 +10,6 @@ type ApiNote = {
   folder_id?: string | null
   title: string
   note_markdown: string
-  overview_json: string
   created_at: string
   updated_at: string
 }
@@ -66,7 +65,6 @@ function toNoteRecord(note: ApiNote): NoteRecord {
     title: note.title,
     folderId: note.folder_id ?? undefined,
     noteMarkdown: note.note_markdown ?? '',
-    overviewJson: note.overview_json ?? '',
     createdAt: Date.parse(note.created_at),
     updatedAt: Date.parse(note.updated_at),
   }

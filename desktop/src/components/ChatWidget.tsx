@@ -1,9 +1,28 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { MessageSquare, Plus, X, Trash2, ChevronLeft, ChevronRight, ChevronDown, Send, Square, Loader2, AlertCircle, Database, Pencil } from 'lucide-react'
+import { MessageSquare, Plus, X, Trash2, ChevronLeft, ChevronRight, ChevronDown, Send, Square, Loader2, AlertCircle, Database, Pencil, Copy, Check } from 'lucide-react'
 import { useChat } from '@/contexts/ChatContext'
 import Response from '@/components/ui/shadcn-io/ai/response'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  const handleCopy = () => {
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="mt-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity text-neutral-500 hover:text-neutral-300 px-1"
+    >
+      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+    </button>
+  )
+}
 
 type ChatWidgetProps = {
   variant?: 'overlay' | 'dashboard'
@@ -42,7 +61,7 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const renameInputRef = useRef<HTMLInputElement>(null)
 
-  const isDark = variant === 'overlay'
+  void variant
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -115,30 +134,21 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
     const el = textareaRef.current
     if (!el) return
     el.style.height = 'auto'
-    el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+    const capped = Math.min(el.scrollHeight, 120)
+    el.style.height = capped + 'px'
+    el.style.overflowY = el.scrollHeight > 120 ? 'auto' : 'hidden'
   }, [input])
-
-  const panelClasses = isDark
-    ? 'bg-neutral-900 border-neutral-700 text-neutral-100'
-    : 'bg-white border-neutral-200 text-neutral-900 dark:bg-neutral-900 dark:border-neutral-700 dark:text-neutral-100'
-
-  const inputClasses = isDark
-    ? 'bg-neutral-800 border-neutral-700 text-neutral-100 placeholder:text-neutral-500'
-    : 'bg-neutral-50 border-neutral-200 text-neutral-900 placeholder:text-neutral-400 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-100 dark:placeholder:text-neutral-500'
 
   return (
     <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-2">
       {/* Chat Panel */}
       {isOpen && (
         <div
-          className={cn(
-            'flex w-[400px] flex-col rounded-xl border shadow-2xl',
-            panelClasses,
-          )}
+          className="flex w-[400px] flex-col rounded-xl border border-neutral-700/70 bg-[#2a2a2b]/95 text-neutral-100 shadow-2xl backdrop-blur-md"
           style={{ height: 500 }}
         >
           {/* Header */}
-          <div className={cn('flex items-center gap-2 border-b px-3 py-2', isDark ? 'border-neutral-700' : 'border-neutral-200 dark:border-neutral-700')}>
+          <div className="flex items-center gap-2 border-b border-neutral-700/70 px-3 py-2">
             <Button
               variant="ghost"
               size="icon"
@@ -163,16 +173,14 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
           <div className="flex flex-1 min-h-0">
             {/* Sidebar */}
             {showSidebar && (
-              <div className={cn('w-[160px] shrink-0 border-r overflow-y-auto', isDark ? 'border-neutral-700' : 'border-neutral-200 dark:border-neutral-700')}>
+              <div className="w-[160px] shrink-0 border-r border-neutral-700/70 overflow-y-auto">
                 <div className="p-1.5 space-y-0.5">
                   {conversations.map((conv) => (
                     <div
                       key={conv.id}
                       className={cn(
                         'group flex items-center gap-1 rounded-md px-2 py-1.5 text-xs cursor-pointer',
-                        conv.id === activeConversationId
-                          ? isDark ? 'bg-neutral-700' : 'bg-neutral-100 dark:bg-neutral-800'
-                          : isDark ? 'hover:bg-neutral-800' : 'hover:bg-neutral-50 dark:hover:bg-neutral-800',
+                        conv.id === activeConversationId ? 'bg-white/10' : 'hover:bg-white/10',
                       )}
                       onClick={() => {
                         if (renamingId !== conv.id) {
@@ -192,10 +200,7 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
                             if (e.key === 'Escape') { setRenamingId(null); setRenameValue('') }
                           }}
                           onBlur={() => void confirmRename()}
-                          className={cn(
-                            'flex-1 min-w-0 rounded px-1 py-0.5 text-xs outline-none',
-                            isDark ? 'bg-neutral-600 text-neutral-100' : 'bg-white border border-neutral-300 dark:bg-neutral-700 dark:text-neutral-100 dark:border-neutral-600',
-                          )}
+                          className="flex-1 min-w-0 rounded bg-neutral-600 px-1 py-0.5 text-xs text-neutral-100 outline-none"
                           onClick={(e) => e.stopPropagation()}
                         />
                       ) : (
@@ -206,20 +211,14 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
                           <button
                             type="button"
                             className="hidden group-hover:block shrink-0 text-neutral-400 hover:text-neutral-200"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              startRename(conv.id, conv.title)
-                            }}
+                            onClick={(e) => { e.stopPropagation(); startRename(conv.id, conv.title) }}
                           >
                             <Pencil className="h-3 w-3" />
                           </button>
                           <button
                             type="button"
-                            className="hidden group-hover:block shrink-0 text-neutral-400 hover:text-red-500"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              void deleteConversation(conv.id)
-                            }}
+                            className="hidden group-hover:block shrink-0 text-neutral-400 hover:text-red-400"
+                            onClick={(e) => { e.stopPropagation(); void deleteConversation(conv.id) }}
                           >
                             <Trash2 className="h-3 w-3" />
                           </button>
@@ -228,7 +227,7 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
                     </div>
                   ))}
                   {conversations.length === 0 && (
-                    <div className="px-2 py-4 text-xs text-neutral-400 text-center">No conversations</div>
+                    <div className="px-2 py-4 text-xs text-neutral-500 text-center">No conversations</div>
                   )}
                 </div>
               </div>
@@ -236,7 +235,7 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
 
             {/* Messages Area */}
             <div className="flex flex-1 min-h-0 min-w-0 flex-col">
-              <div className="flex-1 overflow-y-auto px-3 py-2 space-y-3">
+              <div className={cn('flex-1 px-3 py-2', messages.length === 0 && !isStreaming ? 'overflow-y-hidden' : 'overflow-y-auto space-y-3')}>
                 {messages.length === 0 && !isStreaming && (
                   <div className="flex h-full items-center justify-center">
                     <div className="text-center text-xs text-neutral-400">
@@ -254,23 +253,17 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
                       {/* Thinking block for this message */}
                       {hasThinking && (
                         <div className="flex justify-start">
-                          <div className={cn('max-w-[85%] rounded-md', isDark ? 'bg-neutral-800' : 'bg-neutral-700 dark:bg-neutral-800')}>
+                          <div className="max-w-[85%] rounded-md bg-neutral-800/80">
                             <button
                               type="button"
                               onClick={() => setExpandedThinking(prev => ({ ...prev, [msg.id]: !prev[msg.id] }))}
                               className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-neutral-300"
                             >
-                              {expandedThinking[msg.id] ? (
-                                <ChevronDown className="h-3 w-3 shrink-0" />
-                              ) : (
-                                <ChevronRight className="h-3 w-3 shrink-0" />
-                              )}
-                              <span>
-                                {formatThinkingDuration(thinkingDuration[msg.id] || 0)}
-                              </span>
+                              {expandedThinking[msg.id] ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
+                              <span>{formatThinkingDuration(thinkingDuration[msg.id] || 0)}</span>
                             </button>
                             {expandedThinking[msg.id] && (
-                              <div className={cn('px-3 pb-3 text-xs whitespace-pre-wrap', isDark ? 'text-neutral-400' : 'text-neutral-300')}>
+                              <div className="px-3 pb-3 text-xs whitespace-pre-wrap text-neutral-400">
                                 {completedThinking[msg.id]}
                               </div>
                             )}
@@ -281,7 +274,7 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
                       {/* Tool usage for this message */}
                       {hasTools && (
                         <div className="flex justify-start">
-                          <div className={cn('max-w-[85%] rounded-lg px-2 py-1.5', isDark ? 'bg-neutral-800/50' : 'bg-blue-50 dark:bg-neutral-800/50')}>
+                          <div className="max-w-[85%] rounded-lg px-2 py-1.5 bg-neutral-800/50">
                             {toolUsage[msg.id].map((tool, idx) => {
                               const toolLabel = {
                                 'search_notes': 'Searched notes',
@@ -316,24 +309,23 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
                           msg.role === 'user' ? 'justify-end' : 'justify-start',
                         )}
                       >
-                        <div
-                          className={cn(
-                            'max-w-[85%] rounded-lg px-3 py-2 text-sm',
-                            msg.role === 'user'
-                              ? 'bg-violet-600 text-white'
-                              : isDark
-                                ? 'bg-neutral-800 text-neutral-100'
-                                : 'bg-neutral-100 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100',
-                          )}
-                        >
-                          {msg.role === 'assistant' ? (
-                            <Response className={cn('!text-xs !leading-relaxed', isDark ? '!text-neutral-100' : '!text-neutral-900 dark:!text-neutral-100')}>
+                        {msg.role === 'user' ? (
+                          <div className="group max-w-[85%]">
+                            <div className="rounded-lg px-3 py-2 text-sm bg-neutral-700 text-neutral-100 break-words whitespace-pre-wrap">
+                              {msg.content}
+                            </div>
+                            <div className="flex justify-end">
+                              <CopyButton text={msg.content} />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="group relative w-full">
+                            <Response className="!text-xs !leading-relaxed !text-neutral-100 px-1">
                               {msg.content}
                             </Response>
-                          ) : (
-                            <span className="whitespace-pre-wrap">{msg.content}</span>
-                          )}
-                        </div>
+                            <CopyButton text={msg.content} />
+                          </div>
+                        )}
                       </div>
                     </div>
                   )
@@ -354,23 +346,17 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
                   <>
                     {thinkingText && (
                       <div className="flex justify-start">
-                        <div className={cn('max-w-[85%] rounded-md', isDark ? 'bg-neutral-800' : 'bg-neutral-700 dark:bg-neutral-800')}>
+                        <div className="max-w-[85%] rounded-md bg-neutral-800/80">
                           <button
                             type="button"
                             onClick={() => setStreamingThinkingExpanded(!streamingThinkingExpanded)}
                             className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-neutral-300"
                           >
-                            {streamingThinkingExpanded ? (
-                              <ChevronDown className="h-3 w-3 shrink-0" />
-                            ) : (
-                              <ChevronRight className="h-3 w-3 shrink-0" />
-                            )}
-                            <span>
-                              {formatThinkingDuration(streamingThinkingDuration)}
-                            </span>
+                            {streamingThinkingExpanded ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
+                            <span>{formatThinkingDuration(streamingThinkingDuration)}</span>
                           </button>
                           {streamingThinkingExpanded && (
-                            <div className={cn('px-3 pb-3 text-xs whitespace-pre-wrap', isDark ? 'text-neutral-400' : 'text-neutral-300')}>
+                            <div className="px-3 pb-3 text-xs whitespace-pre-wrap text-neutral-400">
                               {thinkingText}
                             </div>
                           )}
@@ -379,7 +365,7 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
                     )}
                     {currentTools.length > 0 && (
                       <div className="flex justify-start">
-                        <div className={cn('max-w-[85%] rounded-lg px-3 py-2 space-y-1', isDark ? 'bg-neutral-800/50' : 'bg-blue-50 dark:bg-neutral-800/50')}>
+                        <div className="max-w-[85%] rounded-lg px-3 py-2 space-y-1 bg-neutral-800/50">
                           {currentTools.map((tool, idx) => {
                             const toolLabel = {
                               'search_notes': 'Searching notes',
@@ -411,16 +397,17 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
                     )}
                     {streamingText && (
                       <div className="flex justify-start">
-                        <div className={cn('max-w-[85%] rounded-lg px-3 py-2', isDark ? 'bg-neutral-800' : 'bg-neutral-100 dark:bg-neutral-800')}>
-                          <Response className={cn('!text-xs !leading-relaxed', isDark ? '!text-neutral-100' : '!text-neutral-900 dark:!text-neutral-100')}>
+                        <div className="group relative w-full">
+                          <Response className="!text-xs !leading-relaxed !text-neutral-100 px-1">
                             {streamingText}
                           </Response>
+                          <CopyButton text={streamingText} />
                         </div>
                       </div>
                     )}
                     {!streamingText && !thinkingText && (
                       <div className="flex justify-start">
-                        <div className={cn('rounded-lg px-3 py-2', isDark ? 'bg-neutral-800' : 'bg-neutral-100 dark:bg-neutral-800')}>
+                        <div className="rounded-lg px-3 py-2 bg-neutral-800/80">
                           <Loader2 className="h-4 w-4 animate-spin text-neutral-400" />
                         </div>
                       </div>
@@ -432,7 +419,7 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
               </div>
 
               {/* Input Area */}
-              <div className={cn('border-t p-2', isDark ? 'border-neutral-700' : 'border-neutral-200 dark:border-neutral-700')}>
+              <div className="border-t border-neutral-700/70 p-2">
                 <div className="flex items-center gap-1.5">
                   <textarea
                     ref={textareaRef}
@@ -441,10 +428,7 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
                     onKeyDown={handleKeyDown}
                     placeholder="Ask anything..."
                     rows={1}
-                    className={cn(
-                      'flex-1 resize-none rounded-lg border px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-violet-500',
-                      inputClasses,
-                    )}
+                    className="flex-1 resize-none rounded-lg border border-neutral-700/70 bg-neutral-800/80 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-500 outline-none focus:ring-1 focus:ring-violet-500"
                     disabled={isStreaming}
                   />
                   {isStreaming ? (

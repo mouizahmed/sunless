@@ -18,11 +18,16 @@ export default function DashboardSidebar() {
     selectedFolderId,
     selectFolder,
     createFolder,
+    deleteFolder,
+    renameFolder,
     filteredNotes,
     selectedId,
     selectNote,
     search,
     createNewNote,
+    deleteById,
+    renameNote,
+    moveNote,
   } = useDashboardNotes()
 
   const [showCreateFolderDialog, setShowCreateFolderDialog] = useState(false)
@@ -110,6 +115,11 @@ export default function DashboardSidebar() {
           search={search}
           onSelectFolder={selectFolder}
           onSelectNote={selectNote}
+          onRenameFolder={async (id, name) => { await renameFolder(id, name) }}
+          onDeleteFolder={async (id) => { await deleteFolder(id) }}
+          onRenameNote={async (id, title) => { await renameNote(id, title) }}
+          onDeleteNote={async (id) => { await deleteById(id) }}
+          onMoveNote={async (id, folderId) => { await moveNote(id, folderId) }}
         />
       </SidebarContent>
 

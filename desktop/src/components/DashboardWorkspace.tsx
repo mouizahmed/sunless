@@ -3,16 +3,12 @@ import { Check, Folder, Loader2, Sparkles, FileText, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { InfoBanner } from '@/components/ui/info-banner'
-import { updateNote, enhanceNote, generateOverview } from '@/lib/notes-client'
+import { updateNote, enhanceNote } from '@/lib/notes-client'
 import { getTranscriptSegments, type TranscriptSegment } from '@/lib/transcript-client'
 import SavedTranscriptView from '@/components/SavedTranscriptView'
 import MarkdownEditor from '@/components/MarkdownEditor'
-import OverviewPanel from '@/components/OverviewPanel'
 import DashboardHome from '@/components/DashboardHome'
 import { useDashboardNotes } from '@/contexts/DashboardNotesContext'
-import type { OverviewData } from '@/types/note'
-
-type Tab = 'notes' | 'overview'
 
 type DashboardWorkspaceProps = {
   userId?: string
@@ -20,7 +16,6 @@ type DashboardWorkspaceProps = {
 
 export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) {
   const { folders, selectedId, selected, optimisticPatch, replaceNote } = useDashboardNotes()
-  const [tab, setTab] = useState<Tab>('notes')
 
   const [draftTitle, setDraftTitle] = useState('')
   const [folderPickerOpen, setFolderPickerOpen] = useState(false)
@@ -30,10 +25,6 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
 
   const [isEnhancing, setIsEnhancing] = useState(false)
   const [enhanceError, setEnhanceError] = useState<string | null>(null)
-
-  const [overview, setOverview] = useState<OverviewData | null>(null)
-  const [overviewLoading, setOverviewLoading] = useState(false)
-  const overviewTimerRef = useRef<number | null>(null)
 
   const [transcriptOpen, setTranscriptOpen] = useState(false)
   const [transcriptSegments, setTranscriptSegments] = useState<TranscriptSegment[]>([])
@@ -52,9 +43,6 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
       setDraftTitle('')
       setDraftFolderId('')
       setDraftNote('')
-      setTab('notes')
-      setOverview(null)
-      setOverviewLoading(false)
       setTranscriptOpen(false)
       return
     }
@@ -65,18 +53,6 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
     setDraftFolderId(selected.folderId ?? '')
     setDraftNote(selected.noteMarkdown)
     setEnhanceError(null)
-
-    // Parse existing overview if available
-    if (selected.overviewJson) {
-      try {
-        const parsed = JSON.parse(selected.overviewJson) as OverviewData
-        setOverview(parsed)
-      } catch {
-        setOverview(null)
-      }
-    } else {
-      setOverview(null)
-    }
   }, [selected])
 
   // Close folder picker on outside click / escape
@@ -135,21 +111,6 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
           if (!updated) return
           replaceNote(updated)
         })
-
-        // Schedule overview regeneration 3s after save
-        if (overviewTimerRef.current) window.clearTimeout(overviewTimerRef.current)
-        overviewTimerRef.current = window.setTimeout(() => {
-          if (patch.noteMarkdown.trim()) {
-            setOverviewLoading(true)
-            void generateOverview(selectedId)
-              .then(({ note, overview: ov }) => {
-                setOverview(ov)
-                replaceNote(note)
-              })
-              .catch(() => { /* silently fail */ })
-              .finally(() => setOverviewLoading(false))
-          }
-        }, 3000)
       }, 400)
     },
     [optimisticPatch, replaceNote, selectedId, userId],
@@ -169,13 +130,6 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
       noteMarkdown: draftNote,
     })
   }, [draftTitle, draftFolderId, draftNote, scheduleSave, selectedId])
-
-  // Cleanup timers on unmount
-  useEffect(() => {
-    return () => {
-      if (overviewTimerRef.current) window.clearTimeout(overviewTimerRef.current)
-    }
-  }, [])
 
   // Enhance: save version, overwrite note in-place
   const handleEnhance = useCallback(async () => {
@@ -201,11 +155,6 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
       </div>
     )
   }
-
-  const tabs: { key: Tab; label: string; indicator?: boolean }[] = [
-    { key: 'notes', label: 'Notes' },
-    { key: 'overview', label: 'Overview', indicator: overviewLoading },
-  ]
 
   return (
     <div className="flex h-full min-h-0 gap-2">
@@ -265,30 +214,6 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
               </div>
             )}
           </div>
-        </div>
-
-        {/* Tab row */}
-        <div className="flex items-center gap-0.5 border-b border-neutral-200 px-3 py-1.5 dark:border-neutral-800">
-          <div className="flex flex-1 items-center gap-0.5">
-            {tabs.map(({ key, label, indicator }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setTab(key)}
-                className={
-                  tab === key
-                    ? 'flex items-center gap-1.5 rounded-full bg-neutral-900 px-3 py-1 text-xs font-medium text-white dark:bg-neutral-700 dark:text-white'
-                    : 'flex items-center gap-1.5 rounded-full px-3 py-1 text-xs text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200'
-                }
-              >
-                {label}
-                {indicator && (
-                  <span className="h-1.5 w-1.5 rounded-full bg-violet-500 animate-pulse" />
-                )}
-              </button>
-            ))}
-          </div>
-
           {/* Transcript toggle */}
           <button
             type="button"
@@ -299,6 +224,7 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
                 ? 'flex items-center gap-1.5 rounded-full bg-neutral-900 px-3 py-1 text-xs font-medium text-white dark:bg-neutral-700 dark:text-white'
                 : 'flex items-center gap-1.5 rounded-full px-3 py-1 text-xs text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200'
             }
+            style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}
           >
             <FileText className="h-3 w-3" />
             Transcript
@@ -311,30 +237,21 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
           </div>
         ) : null}
 
-        {/* Tab panels */}
+        {/* Editor */}
         <div className="flex-1 min-h-0 overflow-hidden">
-          {tab === 'notes' && (
-            <MarkdownEditor
-              markdown={draftNote}
-              onChange={setDraftNote}
-              placeholder="Markdown notes…"
-              theme="auto"
-              showToolbar
-              className="h-full dashboard-editor"
-              noteId={selectedId}
-            />
-          )}
-          {tab === 'overview' && (
-            <OverviewPanel
-              overview={overview}
-              loading={overviewLoading}
-              hasContent={Boolean(draftNote.trim())}
-            />
-          )}
+          <MarkdownEditor
+            markdown={draftNote}
+            onChange={setDraftNote}
+            placeholder="Markdown notes…"
+            theme="auto"
+            showToolbar
+            className="h-full dashboard-editor"
+            noteId={selectedId}
+          />
         </div>
 
-        {/* Enhance button — only on Notes tab */}
-        {selectedId && tab === 'notes' ? (
+        {/* Enhance button */}
+        {selectedId ? (
           <div className="pointer-events-none absolute bottom-2.5 left-1/2 z-20 -translate-x-1/2">
             <div className="pointer-events-auto flex items-center gap-1.5">
               <Button

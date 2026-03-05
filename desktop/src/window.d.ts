@@ -96,7 +96,6 @@ type NoteRecord = {
   title: string
   folderId?: string
   noteMarkdown: string
-  overviewJson?: string
   createdAt: number
   updatedAt: number
 }

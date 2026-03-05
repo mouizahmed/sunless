@@ -8,7 +8,6 @@ type Note struct {
 	FolderID     *string    `json:"folder_id,omitempty"`
 	Title        string     `json:"title"`
 	NoteMarkdown string     `json:"note_markdown"`
-	OverviewJSON string     `json:"overview_json"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 	DeletedAt    *time.Time `json:"deleted_at,omitempty"`

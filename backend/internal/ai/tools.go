@@ -10,6 +10,7 @@ import (
 
 	"github.com/mouizahmed/justscribe-backend/internal/database"
 	"github.com/mouizahmed/justscribe-backend/internal/repository"
+	"github.com/mouizahmed/justscribe-backend/internal/retrieval"
 )
 
 type ToolExecutor struct {
@@ -17,14 +18,16 @@ type ToolExecutor struct {
 	transcriptRepo *repository.TranscriptRepository
 	folderRepo     *repository.FolderRepository
 	db             *database.DB
+	retriever      *retrieval.Retriever
 }
 
-func NewToolExecutor(noteRepo *repository.NoteRepository, transcriptRepo *repository.TranscriptRepository, folderRepo *repository.FolderRepository, db *database.DB) *ToolExecutor {
+func NewToolExecutor(noteRepo *repository.NoteRepository, transcriptRepo *repository.TranscriptRepository, folderRepo *repository.FolderRepository, db *database.DB, retriever *retrieval.Retriever) *ToolExecutor {
 	return &ToolExecutor{
 		noteRepo:       noteRepo,
 		transcriptRepo: transcriptRepo,
 		folderRepo:     folderRepo,
 		db:             db,
+		retriever:      retriever,
 	}
 }
 
@@ -164,6 +167,22 @@ func (t *ToolExecutor) GetToolDefinitions() []ToolDefinition {
 			},
 			Required: []string{},
 		},
+		// 11. semantic_search
+		{
+			Name:        "semantic_search",
+			Description: "Search notes and transcripts by meaning/concept (not just keywords). Use when the user asks conceptual questions or references ideas rather than exact phrases.",
+			Properties: map[string]interface{}{
+				"query": map[string]interface{}{
+					"type":        "string",
+					"description": "Natural language search query",
+				},
+				"note_id": map[string]interface{}{
+					"type":        "string",
+					"description": "Optional: limit search to a specific note",
+				},
+			},
+			Required: []string{"query"},
+		},
 	}
 }
 
@@ -189,6 +208,8 @@ func (t *ToolExecutor) Execute(ctx context.Context, userID, toolName string, inp
 		return t.getNotesByDate(userID, input)
 	case "get_recent_notes":
 		return t.getRecentNotes(userID, input)
+	case "semantic_search":
+		return t.semanticSearch(ctx, userID, input)
 	default:
 		return "", fmt.Errorf("unknown tool: %s", toolName)
 	}
@@ -532,4 +553,31 @@ func (t *ToolExecutor) getRecentNotes(userID string, input json.RawMessage) (str
 		result.WriteString(fmt.Sprintf("- **%s** (id: %s, %s)\n", note.Title, note.ID, note.CreatedAt.Format("Jan 2, 2006 3:04 PM")))
 	}
 	return result.String(), nil
+}
+
+// 11. semantic_search - Search by meaning/concept
+func (t *ToolExecutor) semanticSearch(ctx context.Context, userID string, input json.RawMessage) (string, error) {
+	var params struct {
+		Query  string `json:"query"`
+		NoteID string `json:"note_id"`
+	}
+	if err := json.Unmarshal(input, &params); err != nil {
+		return "", fmt.Errorf("invalid input: %w", err)
+	}
+
+	if t.retriever == nil {
+		return "Semantic search is not available.", nil
+	}
+
+	scope := retrieval.Scope{NoteID: params.NoteID}
+	result, err := t.retriever.RetrieveContext(ctx, userID, params.Query, scope, 8)
+	if err != nil {
+		return "", fmt.Errorf("semantic search failed: %w", err)
+	}
+
+	if result == "" {
+		return "No relevant content found.", nil
+	}
+
+	return result, nil
 }
