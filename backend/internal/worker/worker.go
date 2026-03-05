@@ -131,6 +131,7 @@ func (w *Worker) indexNote(ctx context.Context, job queue.Job) error {
 				"user_id": job.UserID,
 				"note_id": job.ID,
 				"type":    "note",
+				"title":   note.Title,
 				"content": c.Content,
 			},
 		}
@@ -140,6 +141,11 @@ func (w *Worker) indexNote(ctx context.Context, job queue.Job) error {
 }
 
 func (w *Worker) indexTranscript(ctx context.Context, job queue.Job) error {
+	note, err := w.noteRepo.GetNoteByID(job.UserID, job.ID)
+	if err != nil {
+		return fmt.Errorf("load note for transcript: %w", err)
+	}
+
 	segmentPtrs, err := w.transcriptRepo.GetSegmentsByNote(job.ID, job.UserID)
 	if err != nil {
 		return fmt.Errorf("load segments: %w", err)
@@ -185,6 +191,7 @@ func (w *Worker) indexTranscript(ctx context.Context, job queue.Job) error {
 				"user_id": job.UserID,
 				"note_id": job.ID,
 				"type":    "transcript",
+				"title":   note.Title,
 				"content": c.Content,
 			},
 		}

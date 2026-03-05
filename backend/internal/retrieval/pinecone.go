@@ -20,7 +20,8 @@ type Vector struct {
 type Match struct {
 	Score   float32
 	Content string
-	Type    string // "note" | "transcript" | "message"
+	Type    string // "note" | "transcript"
+	Title   string
 	NoteID  string
 }
 
@@ -120,6 +121,7 @@ func (c *Client) Query(ctx context.Context, embedding []float32, filter map[stri
 			Score:   m.Score,
 			Content: stringFromMD(md, "content"),
 			Type:    stringFromMD(md, "type"),
+			Title:   stringFromMD(md, "title"),
 			NoteID:  stringFromMD(md, "note_id"),
 		})
 	}

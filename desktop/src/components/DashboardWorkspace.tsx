@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
-import { Check, Folder, Sparkles, FileText, X } from 'lucide-react'
+import { Check, Folder, Loader2, Sparkles, FileText, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { InfoBanner } from '@/components/ui/info-banner'
@@ -241,6 +241,19 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
               </div>
             )}
           </div>
+          {/* Enhance button */}
+          <button
+            type="button"
+            onClick={() => void handleEnhance()}
+            disabled={isEnhancing || !draftNote.trim()}
+            title="Enhance note with AI"
+            className="flex items-center gap-1.5 rounded-full bg-violet-600 px-3 py-1 text-xs font-medium text-white hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}
+          >
+            {isEnhancing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+            Enhance
+          </button>
+
           {/* Transcript toggle */}
           <button
             type="button"
@@ -276,23 +289,6 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
             noteId={selectedId}
           />
         </div>
-
-        {/* Enhance button */}
-        {selectedId ? (
-          <div className="pointer-events-none absolute bottom-2.5 left-1/2 z-20 -translate-x-1/2">
-            <div className="pointer-events-auto flex items-center gap-1.5">
-              <Button
-                type="button"
-                className="border-0 bg-violet-600 text-white shadow-md hover:bg-violet-700 focus-visible:ring-violet-400"
-                onClick={() => void handleEnhance()}
-                disabled={!selectedId || isEnhancing || !draftNote.trim()}
-              >
-                {isEnhancing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                Enhance
-              </Button>
-            </div>
-          </div>
-        ) : null}
 
       </div>
 

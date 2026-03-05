@@ -56,6 +56,7 @@ func (r *Retriever) RetrieveContext(ctx context.Context, userID, query string, s
 	// Build filter
 	filter := map[string]interface{}{
 		"user_id": userID,
+		"type":    map[string]interface{}{"$in": []interface{}{"note", "transcript"}},
 	}
 	if scope.NoteID != "" {
 		filter["note_id"] = scope.NoteID
@@ -73,7 +74,7 @@ func (r *Retriever) RetrieveContext(ctx context.Context, userID, query string, s
 	var b strings.Builder
 	b.WriteString("[Relevant context retrieved from your notes and transcripts:]")
 	for i, m := range matches {
-		b.WriteString(fmt.Sprintf("\n[%d] (%s) \"%s\"", i+1, m.Type, m.Content))
+		b.WriteString(fmt.Sprintf("\n[%d] (%s: \"%s\") %s", i+1, m.Type, m.Title, m.Content))
 	}
 
 	return b.String(), nil

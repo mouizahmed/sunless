@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { MessageSquare, Plus, X, Trash2, ChevronDown, Square, Loader2, AlertCircle, Database, Pencil, Copy, Check, ArrowUp } from 'lucide-react'
 import { useChat } from '@/contexts/ChatContext'
 import Response from '@/components/ui/shadcn-io/ai/response'
@@ -56,7 +56,9 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
   const [streamingThinkingDuration, setStreamingThinkingDuration] = useState(0)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [contentVisible, setContentVisible] = useState(isOpen)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesScrollRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const renameInputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -64,15 +66,47 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
 
   void variant
 
+  // Snap to bottom synchronously after messages render
+  useLayoutEffect(() => {
+    const el = messagesScrollRef.current
+    if (!el) return
+    el.scrollTop = el.scrollHeight
+  }, [messages])
+
+  // Keep scroll pinned to bottom throughout the open animation
+  useEffect(() => {
+    if (!isOpen) return
+    let active = true
+    const pin = () => {
+      const el = messagesScrollRef.current
+      if (el) el.scrollTop = el.scrollHeight
+      if (active) requestAnimationFrame(pin)
+    }
+    requestAnimationFrame(pin)
+    const t = setTimeout(() => { active = false }, 250)
+    return () => { active = false; clearTimeout(t) }
+  }, [isOpen])
+
+  // Smooth follow during streaming
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, streamingText])
+  }, [streamingText])
 
   useEffect(() => {
     if (isOpen && textareaRef.current) {
       textareaRef.current.focus()
     }
   }, [isOpen, activeConversationId])
+
+  // Delay content unmount so the close animation can play
+  useEffect(() => {
+    if (isOpen) {
+      setContentVisible(true)
+    } else {
+      const t = setTimeout(() => setContentVisible(false), 200)
+      return () => clearTimeout(t)
+    }
+  }, [isOpen])
 
   // Minimize on outside click
   useEffect(() => {
@@ -193,10 +227,14 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
     <div ref={containerRef} className="fixed bottom-4 right-4 z-50 flex flex-col items-end">
       {/* Single container — collapses to pill when closed */}
       <div
-        className="flex w-[400px] flex-col rounded-2xl border border-neutral-700/50 bg-[#2a2a2b]/95 text-neutral-100 shadow-2xl backdrop-blur-md overflow-visible"
-        style={isOpen ? { height: 500 } : undefined}
+        className={cn(
+          'flex flex-col rounded-2xl border border-neutral-700/50 bg-[#2a2a2b]/95 text-neutral-100 shadow-2xl backdrop-blur-md overflow-hidden',
+          'transition-[width,height] duration-200 ease-out',
+          isOpen ? 'w-[400px]' : 'w-[210px]',
+        )}
+        style={{ height: isOpen ? 500 : 48 }}
       >
-          {isOpen && (<>
+          {contentVisible && (<div className={cn('flex flex-col flex-1 min-h-0 transition-opacity duration-200', isOpen ? 'opacity-100' : 'opacity-0')}>
           {/* Header */}
           <div className="relative flex items-center justify-between border-b border-neutral-700/50 px-3 py-2.5">
             {/* Title / conversation dropdown trigger */}
@@ -305,7 +343,7 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
 
           {/* Messages Area */}
           <div className="flex flex-1 min-h-0 flex-col">
-            <div className={cn('flex-1 px-4 py-3', messages.length === 0 && !isStreaming ? 'overflow-y-hidden' : 'overflow-y-auto space-y-4')}>
+            <div ref={messagesScrollRef} className={cn('flex-1 px-4 py-3 overflow-x-hidden', messages.length === 0 && !isStreaming ? 'overflow-y-hidden' : 'overflow-y-auto space-y-4')}>
               {messages.length === 0 && !isStreaming && (
                 <div className="flex h-full items-center justify-center">
                   <div className="text-center text-xs text-neutral-500">
@@ -445,11 +483,14 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
               <div ref={messagesEndRef} />
             </div>
           </div>
-          </>)}
+          </div>)}
 
           {/* Pill input — always at bottom of container */}
-          {isOpen && <div className="border-t border-neutral-700/50" />}
-          <div className="flex items-center gap-2 px-2 py-2">
+          {contentVisible && <div className={cn('border-t border-neutral-700/50 transition-opacity duration-200', isOpen ? 'opacity-100' : 'opacity-0')} />}
+          <div
+            className={cn('flex items-center gap-2 px-2', isOpen ? 'py-2' : 'py-1.5')}
+            onClick={() => { if (!isOpen) toggleOpen() }}
+          >
             <textarea
               ref={textareaRef}
               value={input}
@@ -459,14 +500,14 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
               placeholder="Ask anything..."
               rows={1}
               className="flex-1 resize-none bg-transparent px-2 text-sm text-neutral-100 placeholder:text-neutral-500 outline-none"
-              disabled={isStreaming}
+              readOnly={isStreaming}
             />
             <div className="shrink-0">
               {isStreaming ? (
                 <button
                   type="button"
-                  onClick={stopStreaming}
-                  title="Stop generating"
+                  onClick={(e) => { e.stopPropagation(); if (!isOpen) toggleOpen(); else stopStreaming() }}
+                  title={isOpen ? 'Stop generating' : 'Open chat'}
                   className="flex h-8 w-8 items-center justify-center rounded-xl bg-neutral-600 text-white hover:bg-neutral-500 transition-colors"
                 >
                   <Square className="h-3 w-3 fill-current" />
