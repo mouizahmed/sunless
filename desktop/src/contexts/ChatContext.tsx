@@ -39,6 +39,7 @@ type ChatContextType = {
 }
 
 const ChatContext = createContext<ChatContextType | null>(null)
+const LS_ACTIVE_CONV = 'chat:activeConversationId'
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
@@ -58,11 +59,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const skipMessageLoadRef = useRef(false)
   const toggleOpen = useCallback(() => setIsOpen((v) => !v), [])
 
-  // Load conversations when user is available
+  // Load conversations and restore last active one
   useEffect(() => {
     if (!user) return
     void apiListConversations()
-      .then(setConversations)
+      .then((convs) => {
+        setConversations(convs)
+        const saved = localStorage.getItem(LS_ACTIVE_CONV)
+        if (saved && convs.some((c) => c.id === saved)) {
+          setActiveConversationId(saved)
+        }
+      })
       .catch(() => {})
   }, [user])
 
@@ -100,6 +107,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const selectConversation = useCallback((id: string | null) => {
     setActiveConversationId(id)
+    if (id) localStorage.setItem(LS_ACTIVE_CONV, id)
+    else localStorage.removeItem(LS_ACTIVE_CONV)
     setStreamingText('')
     setThinkingText('')
     setLastError(null)
@@ -121,6 +130,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       if (activeConversationId === id) {
         setActiveConversationId(null)
         setMessages([])
+        localStorage.removeItem(LS_ACTIVE_CONV)
       }
     },
     [activeConversationId],
@@ -148,6 +158,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setConversations((prev) => [conv, ...prev])
         skipMessageLoadRef.current = true
         setActiveConversationId(conv.id)
+        localStorage.setItem(LS_ACTIVE_CONV, conv.id)
         setMessages([])
         convId = conv.id
         wasCreated = true

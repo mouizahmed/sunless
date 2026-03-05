@@ -163,8 +163,19 @@ export function UpcomingMeetings({ showOnlyMeetings }: UpcomingMeetingsProps) {
 
   if (loading) {
     return (
-      <div className="rounded-md border border-neutral-200 p-2.5 text-center dark:border-neutral-800">
-        <p className="text-xs text-neutral-500 dark:text-neutral-400">Loading upcoming events...</p>
+      <div className="space-y-0.5">
+        {[70, 55, 80].map((w, i) => (
+          <div key={i} className="flex items-start gap-2.5 px-2.5 py-2">
+            <div className="flex min-w-[36px] flex-col items-center gap-1 rounded px-1.5 py-1">
+              <div className="h-2 w-6 animate-pulse rounded bg-neutral-200 dark:bg-neutral-700" />
+              <div className="h-3 w-4 animate-pulse rounded bg-neutral-200 dark:bg-neutral-700" />
+            </div>
+            <div className="min-w-0 flex-1 space-y-1.5 pt-0.5">
+              <div className="h-3 animate-pulse rounded bg-neutral-200 dark:bg-neutral-700" style={{ width: `${w}%` }} />
+              <div className="h-2.5 w-32 animate-pulse rounded bg-neutral-100 dark:bg-neutral-800" />
+            </div>
+          </div>
+        ))}
       </div>
     )
   }

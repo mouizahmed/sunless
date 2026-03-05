@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
-import { Check, Folder, Loader2, Sparkles, FileText, X } from 'lucide-react'
+import { Check, Folder, Sparkles, FileText, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { InfoBanner } from '@/components/ui/info-banner'
@@ -15,7 +15,7 @@ type DashboardWorkspaceProps = {
 }
 
 export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) {
-  const { folders, selectedId, selected, optimisticPatch, replaceNote } = useDashboardNotes()
+  const { folders, selectedId, selected, optimisticPatch, replaceNote, isLoading } = useDashboardNotes()
 
   const [draftTitle, setDraftTitle] = useState('')
   const [folderPickerOpen, setFolderPickerOpen] = useState(false)
@@ -147,6 +147,33 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
       setIsEnhancing(false)
     }
   }, [replaceNote, selectedId])
+
+  if (isLoading) {
+    const hasSavedNote = Boolean(localStorage.getItem('dashboard:selectedNoteId'))
+    return hasSavedNote ? (
+      // Skeleton matching the note editor layout
+      <div className="flex h-full min-h-0 gap-2">
+        <div className="flex min-w-0 flex-1 flex-col rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+          <div className="flex items-center gap-3 border-b border-neutral-200 px-3 py-2 dark:border-neutral-800">
+            <div className="h-4 w-48 animate-pulse rounded bg-neutral-200 dark:bg-neutral-700" />
+            <div className="h-4 w-20 animate-pulse rounded bg-neutral-200 dark:bg-neutral-700" />
+          </div>
+          <div className="flex-1 space-y-3 p-5">
+            <div className="h-3 w-3/4 animate-pulse rounded bg-neutral-100 dark:bg-neutral-800" />
+            <div className="h-3 w-full animate-pulse rounded bg-neutral-100 dark:bg-neutral-800" />
+            <div className="h-3 w-5/6 animate-pulse rounded bg-neutral-100 dark:bg-neutral-800" />
+            <div className="h-3 w-2/3 animate-pulse rounded bg-neutral-100 dark:bg-neutral-800" />
+            <div className="mt-6 h-3 w-full animate-pulse rounded bg-neutral-100 dark:bg-neutral-800" />
+            <div className="h-3 w-4/5 animate-pulse rounded bg-neutral-100 dark:bg-neutral-800" />
+          </div>
+        </div>
+      </div>
+    ) : (
+      <div className="h-full">
+        <DashboardHome />
+      </div>
+    )
+  }
 
   if (!selectedId) {
     return (

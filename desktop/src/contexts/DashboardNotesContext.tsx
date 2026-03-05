@@ -37,6 +37,8 @@ type DashboardNotesContextType = {
 const DashboardNotesContext = createContext<DashboardNotesContextType | null>(null)
 const UNFILED_ID = '__unfiled__'
 const PAGE_SIZE = 20
+const LS_SELECTED_NOTE = 'dashboard:selectedNoteId'
+const LS_SELECTED_FOLDER = 'dashboard:selectedFolderId'
 
 export function excerpt(markdown: string) {
   const text = markdown.replace(/[#*_`>[\]()-]/g, ' ').replace(/\s+/g, ' ').trim()
@@ -97,12 +99,16 @@ export function DashboardNotesProvider({
       setNotes(nextNotes)
       setFolderPagination(nextPagination)
       setSelectedFolderId((current) => {
-        if (!current) return null
-        if (folderList.some((f) => f.id === current)) return current
+        const saved = localStorage.getItem(LS_SELECTED_FOLDER)
+        const candidate = current ?? saved
+        if (!candidate) return null
+        if (folderList.some((f) => f.id === candidate)) return candidate
         return null
       })
       setSelectedId((current) => {
-        if (current && nextNotes.some((n) => n.id === current)) return current
+        const saved = localStorage.getItem(LS_SELECTED_NOTE)
+        const candidate = current ?? saved
+        if (candidate && nextNotes.some((n) => n.id === candidate)) return candidate
         return null
       })
     } catch (e) {
@@ -138,10 +144,14 @@ export function DashboardNotesProvider({
 
   const selectNote = useCallback((id: string | null) => {
     setSelectedId(id)
+    if (id) localStorage.setItem(LS_SELECTED_NOTE, id)
+    else localStorage.removeItem(LS_SELECTED_NOTE)
   }, [])
 
   const selectFolder = useCallback((id: string | null) => {
     setSelectedFolderId(id)
+    if (id) localStorage.setItem(LS_SELECTED_FOLDER, id)
+    else localStorage.removeItem(LS_SELECTED_FOLDER)
   }, [])
 
   const loadMoreForFolder = useCallback(
@@ -217,7 +227,10 @@ export function DashboardNotesProvider({
         delete next[folderId]
         return next
       })
-      setSelectedFolderId((current) => (current === folderId ? null : current))
+      setSelectedFolderId((current) => {
+        if (current === folderId) { localStorage.removeItem(LS_SELECTED_FOLDER); return null }
+        return current
+      })
       return true
     },
     [userId],
@@ -287,6 +300,7 @@ export function DashboardNotesProvider({
       setNotes((prev) => prev.filter((n) => n.id !== noteId))
       setSelectedId((current) => {
         if (current !== noteId) return current
+        localStorage.removeItem(LS_SELECTED_NOTE)
         const remaining = notes.filter((n) => n.id !== noteId)
         return remaining[0]?.id ?? null
       })

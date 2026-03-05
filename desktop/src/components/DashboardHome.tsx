@@ -20,7 +20,7 @@ function relativeTime(timestamp: number) {
 
 export default function DashboardHome() {
   const { user } = useAuth()
-  const { notes, selectNote, createNewNote } = useDashboardNotes()
+  const { notes, isLoading, selectNote, createNewNote } = useDashboardNotes()
   const [showOnlyMeetings, setShowOnlyMeetings] = useState(false)
 
   if (!user) return null
@@ -65,7 +65,22 @@ export default function DashboardHome() {
         </div>
 
         <div className="overflow-y-auto p-1 sidebar-scrollbar">
-          {recentNotes.length > 0 ? (
+          {isLoading ? (
+            <div className="space-y-1 px-1 py-1">
+              {[70, 50, 85, 60, 75].map((w, i) => (
+                <div key={i} className="flex items-start gap-2.5 px-2.5 py-2">
+                  <div className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-pulse rounded bg-neutral-200 dark:bg-neutral-700" />
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <div className="h-3 animate-pulse rounded bg-neutral-200 dark:bg-neutral-700" style={{ width: `${w}%` }} />
+                      <div className="h-2.5 w-8 shrink-0 animate-pulse rounded bg-neutral-200 dark:bg-neutral-700" />
+                    </div>
+                    <div className="h-2.5 w-full animate-pulse rounded bg-neutral-100 dark:bg-neutral-800" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : recentNotes.length > 0 ? (
             <div className="space-y-0.5">
               {recentNotes.map((note) => (
                 <div

@@ -1,7 +1,7 @@
 import { ipcMain, desktopCapturer } from 'electron'
 import { spawn, type ChildProcess } from 'child_process'
 import path from 'node:path'
-import { closeDashboardWindow, createDashboardWindow, getDashboardWindow, getWindow } from './window'
+import { createDashboardWindow, getDashboardWindow, getWindow } from './window'
 import {
   registerKeyboardShortcuts,
   unregisterMovementShortcuts,
@@ -111,7 +111,7 @@ export function setupIpcHandlers() {
   ipcMain.on('dashboard:close', () => {
     const dashboard = getDashboardWindow()
     if (dashboard && !dashboard.isDestroyed()) {
-      closeDashboardWindow()
+      dashboard.hide()
     }
 
     const overlay = getWindow()

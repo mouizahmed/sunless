@@ -409,7 +409,14 @@ export function NotesTree({
         <div className="mt-1 px-2">
           <div className="min-w-0">
             {isLoading ? (
-              <div className="px-2 py-2 text-xs text-neutral-500 dark:text-neutral-400">Loading…</div>
+              <div className="space-y-1 px-1 py-1">
+                {[60, 80, 45, 70, 55].map((w, i) => (
+                  <div key={i} className="flex items-center gap-2 px-1 py-1">
+                    <div className="h-3 w-3 shrink-0 animate-pulse rounded bg-neutral-200 dark:bg-neutral-700" />
+                    <div className={`h-2.5 animate-pulse rounded bg-neutral-200 dark:bg-neutral-700`} style={{ width: `${w}%` }} />
+                  </div>
+                ))}
+              </div>
             ) : error ? (
               <div className="px-2 py-2 text-xs text-red-500">{error}</div>
             ) : (
