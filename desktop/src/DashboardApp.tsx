@@ -74,6 +74,7 @@ function DashboardContent() {
           </div>
         </div>
       </div>
+      <ChatWidget variant="dashboard" />
     </DashboardNotesProvider>
   )
 }
@@ -84,7 +85,6 @@ export default function DashboardApp() {
       <ChatProvider>
         <SidebarProvider defaultOpen={true}>
           <DashboardContent />
-          <ChatWidget variant="dashboard" />
         </SidebarProvider>
       </ChatProvider>
     </AuthProvider>

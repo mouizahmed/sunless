@@ -56,11 +56,11 @@ func (t *ToolExecutor) GetToolDefinitions() []ToolDefinition {
 		// 2. get_note
 		{
 			Name:        "get_note",
-			Description: "Get full content of a note by title or ID. Use fuzzy title matching.",
+			Description: "Get the full markdown content of a note by ID or title. Prefer using the note's UUID when available (e.g. from the active note context).",
 			Properties: map[string]interface{}{
 				"identifier": map[string]interface{}{
 					"type":        "string",
-					"description": "Note title (fuzzy match) or exact UUID",
+					"description": "Exact note UUID, or a title to fuzzy-match",
 				},
 			},
 			Required: []string{"identifier"},
@@ -92,23 +92,7 @@ func (t *ToolExecutor) GetToolDefinitions() []ToolDefinition {
 			Properties:  map[string]interface{}{},
 			Required:    []string{},
 		},
-		// 5. search_transcripts
-		{
-			Name:        "search_transcripts",
-			Description: "Search across all meeting transcripts for keywords.",
-			Properties: map[string]interface{}{
-				"query": map[string]interface{}{
-					"type":        "string",
-					"description": "Search keywords",
-				},
-				"limit": map[string]interface{}{
-					"type":        "integer",
-					"description": "Maximum results (default 20)",
-				},
-			},
-			Required: []string{"query"},
-		},
-		// 6. get_transcript
+		// 5. get_transcript
 		{
 			Name:        "get_transcript",
 			Description: "Get the full transcript for a specific note.",
@@ -155,19 +139,7 @@ func (t *ToolExecutor) GetToolDefinitions() []ToolDefinition {
 			},
 			Required: []string{"start_date"},
 		},
-		// 10. get_recent_notes
-		{
-			Name:        "get_recent_notes",
-			Description: "Get the most recently created or updated notes.",
-			Properties: map[string]interface{}{
-				"limit": map[string]interface{}{
-					"type":        "integer",
-					"description": "Maximum results (default 10)",
-				},
-			},
-			Required: []string{},
-		},
-		// 11. semantic_search
+		// 10. semantic_search
 		{
 			Name:        "semantic_search",
 			Description: "Search notes and transcripts by meaning/concept (not just keywords). Use when the user asks conceptual questions or references ideas rather than exact phrases.",
@@ -183,10 +155,33 @@ func (t *ToolExecutor) GetToolDefinitions() []ToolDefinition {
 			},
 			Required: []string{"query"},
 		},
+		// 12. edit_note
+		{
+			Name:        "edit_note",
+			Description: "Replace the markdown content of the currently active note. Call get_note first to read the current content, apply your changes, then pass the complete updated document. Never pass only the changed portion — always pass the full note. Can only edit the active note — if the user wants to edit a different note, tell them to open it first.",
+			Properties: map[string]interface{}{
+				"content": map[string]interface{}{
+					"type":        "string",
+					"description": "The complete updated markdown content of the note",
+				},
+			},
+			Required: []string{"content"},
+		},
 	}
 }
 
-func (t *ToolExecutor) Execute(ctx context.Context, userID, toolName string, input json.RawMessage) (string, error) {
+func (t *ToolExecutor) GetReadOnlyToolDefinitions() []ToolDefinition {
+	all := t.GetToolDefinitions()
+	out := make([]ToolDefinition, 0, len(all)-1)
+	for _, td := range all {
+		if td.Name != "edit_note" {
+			out = append(out, td)
+		}
+	}
+	return out
+}
+
+func (t *ToolExecutor) Execute(ctx context.Context, userID, activeNoteID, toolName string, input json.RawMessage) (string, error) {
 	switch toolName {
 	case "search_notes":
 		return t.searchNotes(userID, input)
@@ -196,8 +191,6 @@ func (t *ToolExecutor) Execute(ctx context.Context, userID, toolName string, inp
 		return t.listNotes(userID, input)
 	case "get_note_stats":
 		return t.getNoteStats(userID, input)
-	case "search_transcripts":
-		return t.searchTranscripts(userID, input)
 	case "get_transcript":
 		return t.getTranscript(userID, input)
 	case "list_folders":
@@ -206,10 +199,10 @@ func (t *ToolExecutor) Execute(ctx context.Context, userID, toolName string, inp
 		return t.getFolderContents(userID, input)
 	case "get_notes_by_date":
 		return t.getNotesByDate(userID, input)
-	case "get_recent_notes":
-		return t.getRecentNotes(userID, input)
 	case "semantic_search":
 		return t.semanticSearch(ctx, userID, input)
+	case "edit_note":
+		return t.editNote(userID, activeNoteID, input)
 	default:
 		return "", fmt.Errorf("unknown tool: %s", toolName)
 	}
@@ -282,14 +275,18 @@ func (t *ToolExecutor) getNote(userID string, input json.RawMessage) (string, er
 	}
 
 	var result strings.Builder
-	result.WriteString(fmt.Sprintf("# %s (id: %s)\n\n", note.Title, note.ID))
-	result.WriteString(fmt.Sprintf("Created: %s\n", note.CreatedAt.Format("Jan 2, 2006 3:04 PM")))
-	result.WriteString(fmt.Sprintf("Updated: %s\n\n", note.UpdatedAt.Format("Jan 2, 2006 3:04 PM")))
-
+	result.WriteString(fmt.Sprintf("Note: %s (ID: %s)\n\n", note.Title, note.ID))
 	if note.NoteMarkdown != "" {
+		result.WriteString("Content:\n")
 		result.WriteString(note.NoteMarkdown)
 	} else {
-		result.WriteString("(empty note)")
+		result.WriteString("This note has no written content.")
+	}
+
+	// Indicate if a transcript is available so the AI can fetch it when needed
+	segments, err := t.transcriptRepo.GetSegmentsByNote(note.ID, userID)
+	if err == nil && len(segments) > 0 {
+		result.WriteString(fmt.Sprintf("\n\n[This note has a meeting transcript (%d segments). Call get_transcript with this note's ID to retrieve it.]", len(segments)))
 	}
 
 	return result.String(), nil
@@ -364,45 +361,7 @@ func (t *ToolExecutor) getNoteStats(userID string, input json.RawMessage) (strin
 	return result.String(), nil
 }
 
-// 5. search_transcripts - Search transcripts
-func (t *ToolExecutor) searchTranscripts(userID string, input json.RawMessage) (string, error) {
-	var params struct {
-		Query string `json:"query"`
-		Limit int    `json:"limit"`
-	}
-	if err := json.Unmarshal(input, &params); err != nil {
-		return "", fmt.Errorf("invalid input: %w", err)
-	}
-
-	if params.Limit == 0 {
-		params.Limit = 20
-	}
-
-	segments, err := t.transcriptRepo.SearchSegments(userID, params.Query, params.Limit)
-	if err != nil {
-		return "", fmt.Errorf("search failed: %w", err)
-	}
-
-	if len(segments) == 0 {
-		return "No transcript segments found matching your search.", nil
-	}
-
-	var result strings.Builder
-	result.WriteString(fmt.Sprintf("Found %d transcript segment(s):\n\n", len(segments)))
-	for _, seg := range segments {
-		speaker := "Speaker"
-		if seg.Channel == 0 {
-			speaker = "You"
-		} else {
-			speaker = fmt.Sprintf("Speaker %d", seg.Channel)
-		}
-		result.WriteString(fmt.Sprintf("[%s]: %s\n\n", speaker, seg.Text))
-	}
-
-	return result.String(), nil
-}
-
-// 6. get_transcript - Get full transcript for a note
+// 5. get_transcript - Get full transcript for a note
 func (t *ToolExecutor) getTranscript(userID string, input json.RawMessage) (string, error) {
 	var params struct {
 		NoteID string `json:"note_id"`
@@ -553,6 +512,33 @@ func (t *ToolExecutor) getRecentNotes(userID string, input json.RawMessage) (str
 		result.WriteString(fmt.Sprintf("- **%s** (id: %s, %s)\n", note.Title, note.ID, note.CreatedAt.Format("Jan 2, 2006 3:04 PM")))
 	}
 	return result.String(), nil
+}
+
+// 12. edit_note - Replace content of the active note
+func (t *ToolExecutor) editNote(userID, activeNoteID string, input json.RawMessage) (string, error) {
+	if activeNoteID == "" {
+		return "No note is currently open. Ask the user to open a note first.", nil
+	}
+
+	var params struct {
+		Content string `json:"content"`
+	}
+	if err := json.Unmarshal(input, &params); err != nil {
+		return "", fmt.Errorf("invalid input: %w", err)
+	}
+
+	note, err := t.noteRepo.GetNoteByID(userID, activeNoteID)
+	if err != nil {
+		return "Note not found.", nil
+	}
+
+	note.NoteMarkdown = params.Content
+	_, err = t.noteRepo.UpdateNote(note)
+	if err != nil {
+		return "", fmt.Errorf("update failed: %w", err)
+	}
+
+	return fmt.Sprintf("Note \"%s\" updated successfully.", note.Title), nil
 }
 
 // 11. semantic_search - Search by meaning/concept

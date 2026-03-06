@@ -6,6 +6,8 @@ export type Conversation = {
   id: string
   title: string
   summary: string
+  noteId: string | null
+  folderId: string | null
   createdAt: number
   updatedAt: number
 }
@@ -34,6 +36,7 @@ export type SSEEvent =
   | { type: 'tool_result'; tool_name: string; result: string }
   | { type: 'done'; message?: ChatMessage; user_message?: ChatMessage }
   | { type: 'title'; title: string }
+  | { type: 'note_updated'; note_id: string; content: string }
   | { type: 'error'; error: string }
 
 type ApiConversation = {
@@ -41,6 +44,8 @@ type ApiConversation = {
   user_id: string
   title: string
   summary: string
+  note_id: string | null
+  folder_id: string | null
   created_at: string
   updated_at: string
 }
@@ -62,6 +67,8 @@ function toConversation(c: ApiConversation): Conversation {
     id: c.id,
     title: c.title,
     summary: c.summary,
+    noteId: c.note_id ?? null,
+    folderId: c.folder_id ?? null,
     createdAt: Date.parse(c.created_at),
     updatedAt: Date.parse(c.updated_at),
   }
@@ -104,7 +111,11 @@ async function fetchJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> 
   return (await response.json()) as T
 }
 
-export async function createConversation(title?: string): Promise<Conversation> {
+export async function createConversation(
+  title?: string,
+  noteId?: string,
+  folderId?: string,
+): Promise<Conversation> {
   const idToken = await getIdToken()
   const payload = await fetchJson<{ conversation: ApiConversation }>(
     `${API_BASE_URL}/chat/conversations`,
@@ -115,16 +126,27 @@ export async function createConversation(title?: string): Promise<Conversation> 
         Accept: 'application/json',
         Authorization: `Bearer ${idToken}`,
       },
-      body: JSON.stringify({ title: title || 'New conversation' }),
+      body: JSON.stringify({
+        title: title || 'New conversation',
+        ...(noteId ? { note_id: noteId } : {}),
+        ...(folderId ? { folder_id: folderId } : {}),
+      }),
     },
   )
   return toConversation(payload.conversation)
 }
 
-export async function listConversations(): Promise<Conversation[]> {
+export async function listConversations(
+  noteId?: string,
+  folderId?: string,
+): Promise<Conversation[]> {
   const idToken = await getIdToken()
+  const params = new URLSearchParams()
+  if (noteId) params.set('note_id', noteId)
+  if (folderId) params.set('folder_id', folderId)
+  const qs = params.toString()
   const payload = await fetchJson<{ conversations: ApiConversation[] }>(
-    `${API_BASE_URL}/chat/conversations`,
+    `${API_BASE_URL}/chat/conversations${qs ? `?${qs}` : ''}`,
     {
       headers: { Accept: 'application/json', Authorization: `Bearer ${idToken}` },
     },

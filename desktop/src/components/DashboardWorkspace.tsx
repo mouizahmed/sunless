@@ -55,6 +55,18 @@ export default function DashboardWorkspace({ userId }: DashboardWorkspaceProps) 
     setEnhanceError(null)
   }, [selected])
 
+  // Sync AI-driven note edits into the local draft so the editor updates in real time
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { noteId, content } = (e as CustomEvent<{ noteId: string; content: string }>).detail
+      if (noteId === selectedId && content != null) {
+        setDraftNote(content)
+      }
+    }
+    window.addEventListener('note-updated-by-ai', handler)
+    return () => window.removeEventListener('note-updated-by-ai', handler)
+  }, [selectedId])
+
   // Close folder picker on outside click / escape
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {

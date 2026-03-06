@@ -107,7 +107,7 @@ func (w *Worker) indexNote(ctx context.Context, job queue.Job) error {
 		"type":    "note",
 	})
 
-	cks := chunks.ChunkText(note.Title, note.NoteMarkdown, chunks.DefaultChunkSize)
+	cks := chunks.ChunkText(note.NoteMarkdown, chunks.DefaultChunkSize)
 	if len(cks) == 0 {
 		return nil
 	}

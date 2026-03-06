@@ -1,7 +1,6 @@
 package chunks
 
 import (
-	"fmt"
 	"html"
 	"strings"
 
@@ -20,8 +19,7 @@ type Chunk struct {
 
 // ChunkText splits markdown text into chunks of maxChars.
 // Strategy: split on \n\n (paragraphs); if a paragraph > maxChars, split on \n.
-// Prepends title to first chunk: "[Title: {title}]\n\n{chunk}"
-func ChunkText(title, text string, maxChars int) []Chunk {
+func ChunkText(text string, maxChars int) []Chunk {
 	if maxChars <= 0 {
 		maxChars = DefaultChunkSize
 	}
@@ -70,11 +68,6 @@ func ChunkText(title, text string, maxChars int) []Chunk {
 	}
 	if current.Len() > 0 {
 		chunks = append(chunks, Chunk{Index: len(chunks), Content: current.String()})
-	}
-
-	// Prepend title to first chunk
-	if len(chunks) > 0 && title != "" {
-		chunks[0].Content = fmt.Sprintf("[Title: %s]\n\n%s", title, chunks[0].Content)
 	}
 
 	return chunks

@@ -34,8 +34,9 @@ type ChatContextType = {
   thinkingDuration: Record<string, number>
   toolUsage: Record<string, ToolUsage[]>
   currentTools: ToolUsage[]
-  sendMessage: (content: string) => Promise<void>
+  sendMessage: (content: string, noteId?: string | null, folderId?: string | null) => Promise<void>
   stopStreaming: () => void
+  loadConversations: (noteId?: string | null, folderId?: string | null) => Promise<void>
 }
 
 const ChatContext = createContext<ChatContextType | null>(null)
@@ -59,19 +60,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const skipMessageLoadRef = useRef(false)
   const toggleOpen = useCallback(() => setIsOpen((v) => !v), [])
 
-  // Load conversations and restore last active one
+  const loadConversations = useCallback(async (noteId?: string | null, folderId?: string | null) => {
+    const convs = await apiListConversations(noteId ?? undefined, folderId ?? undefined)
+    setConversations(convs)
+    setActiveConversationId(prev =>
+      prev && convs.some(c => c.id === prev) ? prev : (convs[0]?.id ?? null)
+    )
+  }, [])
+
+  // Load conversations on auth
   useEffect(() => {
     if (!user) return
-    void apiListConversations()
-      .then((convs) => {
-        setConversations(convs)
-        const saved = localStorage.getItem(LS_ACTIVE_CONV)
-        if (saved && convs.some((c) => c.id === saved)) {
-          setActiveConversationId(saved)
-        }
-      })
-      .catch(() => {})
-  }, [user])
+    void loadConversations()
+  }, [user, loadConversations])
 
   // Load messages when active conversation changes
   useEffect(() => {
@@ -147,14 +148,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, noteId?: string | null, folderId?: string | null) => {
       if (isStreaming) return
 
       // Create conversation if needed
       let convId = activeConversationId
       let wasCreated = false
       if (!convId) {
-        const conv = await apiCreateConversation()
+        const conv = await apiCreateConversation(
+          undefined,
+          noteId ?? undefined,
+          folderId ?? undefined,
+        )
         setConversations((prev) => [conv, ...prev])
         skipMessageLoadRef.current = true
         setActiveConversationId(conv.id)
@@ -260,6 +265,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               })
               break
             }
+            case 'note_updated':
+              window.dispatchEvent(new CustomEvent('note-updated-by-ai', {
+                detail: { noteId: event.note_id, content: event.content },
+              }))
+              break
             case 'title':
               setConversations((prev) =>
                 prev.map((c) => c.id === convId ? { ...c, title: event.title } : c)
@@ -337,6 +347,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         currentTools,
         sendMessage,
         stopStreaming,
+        loadConversations,
       }}
     >
       {children}

@@ -315,6 +315,18 @@ export function DashboardNotesProvider({
     )
   }, [])
 
+  // Listen for AI-driven note edits and update local state in real time
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { noteId, content } = (e as CustomEvent<{ noteId: string; content: string }>).detail
+      if (noteId && content != null) {
+        optimisticPatch(noteId, { noteMarkdown: content })
+      }
+    }
+    window.addEventListener('note-updated-by-ai', handler)
+    return () => window.removeEventListener('note-updated-by-ai', handler)
+  }, [optimisticPatch])
+
   const replaceNote = useCallback((note: NoteRecord) => {
     setNotes((prev) =>
       prev.map((n) => (n.id === note.id ? note : n)),

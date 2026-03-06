@@ -8,6 +8,8 @@ type Conversation struct {
 	Title                   string     `json:"title"`
 	Summary                 string     `json:"summary"`
 	SummaryThroughMessageID *string    `json:"summary_through_message_id,omitempty"`
+	NoteID                  *string    `json:"note_id,omitempty"`
+	FolderID                *string    `json:"folder_id,omitempty"`
 	CreatedAt               time.Time  `json:"created_at"`
 	UpdatedAt               time.Time  `json:"updated_at"`
 	DeletedAt               *time.Time `json:"deleted_at,omitempty"`

@@ -18,20 +18,22 @@ func NewConversationRepository(db *database.DB) *ConversationRepository {
 
 func (r *ConversationRepository) Create(conv *models.Conversation) (*models.Conversation, error) {
 	query := `
-		INSERT INTO conversations (user_id, title)
-		VALUES ($1, $2)
-		RETURNING id, user_id, title, summary, summary_through_message_id, created_at, updated_at, deleted_at
+		INSERT INTO conversations (user_id, title, note_id, folder_id)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, user_id, title, summary, summary_through_message_id, note_id, folder_id, created_at, updated_at, deleted_at
 	`
 
 	var created models.Conversation
-	var summaryThrough sql.NullString
+	var summaryThrough, noteID, folderID sql.NullString
 	var deleted sql.NullTime
-	err := r.db.QueryRow(query, conv.UserID, conv.Title).Scan(
+	err := r.db.QueryRow(query, conv.UserID, conv.Title, toNullString(conv.NoteID), toNullString(conv.FolderID)).Scan(
 		&created.ID,
 		&created.UserID,
 		&created.Title,
 		&created.Summary,
 		&summaryThrough,
+		&noteID,
+		&folderID,
 		&created.CreatedAt,
 		&created.UpdatedAt,
 		&deleted,
@@ -41,19 +43,21 @@ func (r *ConversationRepository) Create(conv *models.Conversation) (*models.Conv
 	}
 
 	created.SummaryThroughMessageID = fromNullString(summaryThrough)
+	created.NoteID = fromNullString(noteID)
+	created.FolderID = fromNullString(folderID)
 	created.DeletedAt = fromNullTime(deleted)
 	return &created, nil
 }
 
 func (r *ConversationRepository) GetByID(userID, convID string) (*models.Conversation, error) {
 	query := `
-		SELECT id, user_id, title, summary, summary_through_message_id, created_at, updated_at, deleted_at
+		SELECT id, user_id, title, summary, summary_through_message_id, note_id, folder_id, created_at, updated_at, deleted_at
 		FROM conversations
 		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
 	`
 
 	var conv models.Conversation
-	var summaryThrough sql.NullString
+	var summaryThrough, noteID, folderID sql.NullString
 	var deleted sql.NullTime
 	err := r.db.QueryRow(query, convID, userID).Scan(
 		&conv.ID,
@@ -61,6 +65,8 @@ func (r *ConversationRepository) GetByID(userID, convID string) (*models.Convers
 		&conv.Title,
 		&conv.Summary,
 		&summaryThrough,
+		&noteID,
+		&folderID,
 		&conv.CreatedAt,
 		&conv.UpdatedAt,
 		&deleted,
@@ -73,11 +79,13 @@ func (r *ConversationRepository) GetByID(userID, convID string) (*models.Convers
 	}
 
 	conv.SummaryThroughMessageID = fromNullString(summaryThrough)
+	conv.NoteID = fromNullString(noteID)
+	conv.FolderID = fromNullString(folderID)
 	conv.DeletedAt = fromNullTime(deleted)
 	return &conv, nil
 }
 
-func (r *ConversationRepository) ListByUser(userID string, limit int) ([]models.Conversation, error) {
+func (r *ConversationRepository) ListByScope(userID string, noteID *string, folderID *string, limit int) ([]models.Conversation, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -85,15 +93,27 @@ func (r *ConversationRepository) ListByUser(userID string, limit int) ([]models.
 		limit = 100
 	}
 
-	query := `
-		SELECT id, user_id, title, summary, summary_through_message_id, created_at, updated_at, deleted_at
-		FROM conversations
-		WHERE user_id = $1 AND deleted_at IS NULL
-		ORDER BY updated_at DESC
-		LIMIT $2
-	`
+	var query string
+	var args []interface{}
+	args = append(args, userID)
 
-	rows, err := r.db.Query(query, userID, limit)
+	base := `
+		SELECT id, user_id, title, summary, summary_through_message_id, note_id, folder_id, created_at, updated_at, deleted_at
+		FROM conversations
+		WHERE user_id = $1 AND deleted_at IS NULL`
+
+	if noteID != nil {
+		query = base + ` AND note_id = $2 ORDER BY updated_at DESC LIMIT $3`
+		args = append(args, *noteID, limit)
+	} else if folderID != nil {
+		query = base + ` AND folder_id = $2 ORDER BY updated_at DESC LIMIT $3`
+		args = append(args, *folderID, limit)
+	} else {
+		query = base + ` AND note_id IS NULL AND folder_id IS NULL ORDER BY updated_at DESC LIMIT $2`
+		args = append(args, limit)
+	}
+
+	rows, err := r.db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list conversations: %w", err)
 	}
@@ -102,7 +122,7 @@ func (r *ConversationRepository) ListByUser(userID string, limit int) ([]models.
 	conversations := []models.Conversation{}
 	for rows.Next() {
 		var conv models.Conversation
-		var summaryThrough sql.NullString
+		var summaryThrough, nID, fID sql.NullString
 		var deleted sql.NullTime
 		if err := rows.Scan(
 			&conv.ID,
@@ -110,6 +130,8 @@ func (r *ConversationRepository) ListByUser(userID string, limit int) ([]models.
 			&conv.Title,
 			&conv.Summary,
 			&summaryThrough,
+			&nID,
+			&fID,
 			&conv.CreatedAt,
 			&conv.UpdatedAt,
 			&deleted,
@@ -117,6 +139,8 @@ func (r *ConversationRepository) ListByUser(userID string, limit int) ([]models.
 			return nil, fmt.Errorf("failed to scan conversation: %w", err)
 		}
 		conv.SummaryThroughMessageID = fromNullString(summaryThrough)
+		conv.NoteID = fromNullString(nID)
+		conv.FolderID = fromNullString(fID)
 		conv.DeletedAt = fromNullTime(deleted)
 		conversations = append(conversations, conv)
 	}

@@ -46,12 +46,13 @@ func NewChatHandler(
 }
 
 type CreateConversationRequest struct {
-	Title string `json:"title"`
+	Title    string  `json:"title"`
+	NoteID   *string `json:"note_id,omitempty"`
+	FolderID *string `json:"folder_id,omitempty"`
 }
 
 type SendMessageRequest struct {
-	Content       string  `json:"content"`
-	ContextNoteID *string `json:"context_note_id,omitempty"`
+	Content string `json:"content"`
 }
 
 func (h *ChatHandler) CreateConversation(c *gin.Context) {
@@ -70,8 +71,10 @@ func (h *ChatHandler) CreateConversation(c *gin.Context) {
 	}
 
 	conv, err := h.convRepo.Create(&models.Conversation{
-		UserID: userID,
-		Title:  req.Title,
+		UserID:   userID,
+		Title:    req.Title,
+		NoteID:   nilIfEmpty(req.NoteID),
+		FolderID: nilIfEmpty(req.FolderID),
 	})
 	if err != nil {
 		log.Printf("chat: failed to create conversation: %v", err)
@@ -89,7 +92,9 @@ func (h *ChatHandler) ListConversations(c *gin.Context) {
 		return
 	}
 
-	conversations, err := h.convRepo.ListByUser(userID, 50)
+	noteID := nilIfEmptyStr(c.Query("note_id"))
+	folderID := nilIfEmptyStr(c.Query("folder_id"))
+	conversations, err := h.convRepo.ListByScope(userID, noteID, folderID, 50)
 	if err != nil {
 		log.Printf("chat: failed to list conversations: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list conversations"})
@@ -291,20 +296,24 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 	c.Writer.WriteHeader(http.StatusOK)
 	c.Writer.Flush()
 
-	// Retrieve RAG context
-	scope := retrieval.Scope{}
-	if req.ContextNoteID != nil {
-		scope.NoteID = *req.ContextNoteID
+	// Derive active note from the conversation's scope
+	activeNoteID := ""
+	if conv.NoteID != nil {
+		activeNoteID = *conv.NoteID
 	}
-	ragContext, _ := h.retriever.RetrieveContext(c.Request.Context(), userID, content, scope, 6)
+
+	tools := h.toolExecutor.GetReadOnlyToolDefinitions()
+	if conv.NoteID != nil {
+		tools = h.toolExecutor.GetToolDefinitions()
+	}
 
 	chatParams := ai.ChatParams{
-		SystemPrompt: prompts.ChatSystemWithContext(ragContext) + "\n\nCurrent date and time: " + time.Now().Format("2006-01-02 15:04 MST"),
+		SystemPrompt: prompts.ChatSystemWithContext(activeNoteID, "") + "\n\nCurrent date and time: " + time.Now().Format("2006-01-02 15:04 MST"),
 		Messages:     contextMessages,
-		Tools:        h.toolExecutor.GetToolDefinitions(),
+		Tools:        tools,
 	}
 
-	sr, err := h.streamResponse(c, userID, convID, chatParams)
+	sr, err := h.streamResponse(c, userID, convID, activeNoteID, chatParams)
 	if err != nil {
 		writeSSE(c, "error", map[string]interface{}{"error": err.Error()})
 		return
@@ -379,7 +388,7 @@ type intermediateToolCall struct {
 	Args string `json:"args"`
 }
 
-func (h *ChatHandler) streamResponse(c *gin.Context, userID, convID string, params ai.ChatParams) (*streamResult, error) {
+func (h *ChatHandler) streamResponse(c *gin.Context, userID, convID, activeNoteID string, params ai.ChatParams) (*streamResult, error) {
 	ctx := c.Request.Context()
 
 	messages := params.Messages
@@ -440,16 +449,32 @@ func (h *ChatHandler) streamResponse(c *gin.Context, userID, convID string, para
 		// Append assistant message with tool calls, then execute tools
 		messages = append(messages, result.AssistantMessage)
 		for _, tu := range result.ToolUses {
-			toolResult, execErr := h.toolExecutor.Execute(ctx, userID, tu.Name, json.RawMessage(tu.Input))
+			toolResult, execErr := h.toolExecutor.Execute(ctx, userID, activeNoteID, tu.Name, json.RawMessage(tu.Input))
 			if execErr != nil {
 				toolResult = fmt.Sprintf("Tool error: %s", execErr.Error())
 			}
+
+			log.Printf("tool [%s] input=%s output=%s", tu.Name, tu.Input, toolResult)
 
 			writeSSE(c, "tool_result", map[string]interface{}{
 				"tool_name": tu.Name,
 				"result":    toolResult,
 			})
 			c.Writer.Flush()
+
+			// Notify frontend when a note was edited so the editor can refresh
+			if tu.Name == "edit_note" && execErr == nil && activeNoteID != "" {
+				var editInput struct {
+					Content string `json:"content"`
+				}
+				if json.Unmarshal([]byte(tu.Input), &editInput) == nil {
+					writeSSE(c, "note_updated", map[string]interface{}{
+						"note_id": activeNoteID,
+						"content": editInput.Content,
+					})
+					c.Writer.Flush()
+				}
+			}
 
 			toolsUsed = append(toolsUsed, toolUsageEntry{ToolName: tu.Name, Result: toolResult})
 
@@ -547,4 +572,18 @@ func writeSSE(c *gin.Context, eventType string, data map[string]interface{}) {
 func estimateTokens(text string) int {
 	// Rough estimate: ~4 characters per token
 	return len(text) / 4
+}
+
+func nilIfEmpty(s *string) *string {
+	if s == nil || *s == "" {
+		return nil
+	}
+	return s
+}
+
+func nilIfEmptyStr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }

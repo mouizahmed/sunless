@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { MessageSquare, Plus, X, Trash2, ChevronDown, Square, Loader2, AlertCircle, Database, Pencil, Copy, Check, ArrowUp } from 'lucide-react'
 import { useChat } from '@/contexts/ChatContext'
+import { useDashboardNotes } from '@/contexts/DashboardNotesContext'
 import Response from '@/components/ui/shadcn-io/ai/response'
 import { cn } from '@/lib/utils'
 
@@ -47,7 +48,19 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
     currentTools,
     sendMessage,
     stopStreaming,
+    loadConversations,
   } = useChat()
+
+  const { selected: selectedNote } = useDashboardNotes()
+
+  // Reload scoped conversations when the selected note changes
+  useEffect(() => {
+    void loadConversations(selectedNote?.id ?? null, null)
+  }, [selectedNote?.id, loadConversations])
+
+  // Context pill: for new chats show the currently selected note; for existing show the conv's note
+  const activeConv = activeConversationId ? conversations.find(c => c.id === activeConversationId) : null
+  const pillTitle = activeConversationId ? (activeConv?.noteId ? selectedNote?.title ?? null : null) : (selectedNote?.title ?? null)
 
   const [input, setInput] = useState('')
   const [showConvDropdown, setShowConvDropdown] = useState(false)
@@ -120,7 +133,7 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
     return () => document.removeEventListener('mousedown', handler)
   }, [isOpen, toggleOpen])
 
-  // Close dropdown on outside click
+  // Close conv dropdown on outside click
   useEffect(() => {
     if (!showConvDropdown) return
     const handler = (e: MouseEvent) => {
@@ -149,8 +162,8 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
     const trimmed = input.trim()
     if (!trimmed || isStreaming) return
     setInput('')
-    await sendMessage(trimmed)
-  }, [input, isStreaming, sendMessage])
+    await sendMessage(trimmed, selectedNote?.id ?? null, null)
+  }, [input, isStreaming, sendMessage, selectedNote?.id])
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -202,12 +215,13 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
     get_note: 'Retrieved note',
     list_notes: 'Listed notes',
     get_note_stats: 'Analyzed notes',
-    search_transcripts: 'Searched transcripts',
     get_transcript: 'Retrieved transcript',
     list_folders: 'Listed folders',
     get_folder_contents: 'Retrieved folder contents',
     get_notes_by_date: 'Found notes by date',
     get_recent_notes: 'Retrieved recent notes',
+    semantic_search: 'Searched by meaning',
+    edit_note: 'Edited note',
   }
 
   const streamingToolLabels: Record<string, string> = {
@@ -215,12 +229,13 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
     get_note: 'Retrieving note',
     list_notes: 'Listing notes',
     get_note_stats: 'Analyzing notes',
-    search_transcripts: 'Searching transcripts',
     get_transcript: 'Retrieving transcript',
     list_folders: 'Listing folders',
     get_folder_contents: 'Retrieving folder contents',
     get_notes_by_date: 'Finding notes by date',
     get_recent_notes: 'Retrieving recent notes',
+    semantic_search: 'Searching by meaning',
+    edit_note: 'Editing note',
   }
 
   return (
@@ -383,12 +398,16 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
                     {hasTools && (
                       <div className="flex justify-start">
                         <div className="max-w-[85%] rounded-lg px-2 py-1.5 bg-neutral-800/50">
-                          {toolUsage[msg.id].map((tool, idx) => (
-                            <div key={idx} className="flex items-center gap-2 text-xs">
-                              <Database className="h-3 w-3 shrink-0 text-blue-400" />
-                              <span className="text-blue-400">{toolLabels[tool.tool_name] ?? 'Used tool'}</span>
-                            </div>
-                          ))}
+                          {toolUsage[msg.id].map((tool, idx) => {
+                            const succeeded = tool.tool_name !== 'edit_note' || tool.result?.endsWith('updated successfully.')
+                            const label = succeeded ? (toolLabels[tool.tool_name] ?? 'Used tool') : 'Edit blocked'
+                            return (
+                              <div key={idx} className="flex items-center gap-2 text-xs">
+                                <Database className={cn('h-3 w-3 shrink-0', succeeded ? 'text-blue-400' : 'text-neutral-500')} />
+                                <span className={succeeded ? 'text-blue-400' : 'text-neutral-500'}>{label}</span>
+                              </div>
+                            )
+                          })}
                         </div>
                       </div>
                     )}
@@ -452,13 +471,19 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
                   {currentTools.length > 0 && (
                     <div className="flex justify-start">
                       <div className="max-w-[85%] rounded-lg px-2 py-1.5 space-y-1 bg-neutral-800/50">
-                        {currentTools.map((tool, idx) => (
-                          <div key={idx} className="flex items-center gap-2 text-xs">
-                            <Database className="h-3 w-3 shrink-0 text-blue-400" />
-                            <span className="text-blue-400">{streamingToolLabels[tool.tool_name] ?? 'Using tool'}...</span>
-                            {tool.result && <span className="text-green-400">✓</span>}
-                          </div>
-                        ))}
+                        {currentTools.map((tool, idx) => {
+                          const succeeded = tool.tool_name !== 'edit_note' || !tool.result || tool.result.endsWith('updated successfully.')
+                          const label = succeeded ? (streamingToolLabels[tool.tool_name] ?? 'Using tool') : 'Edit blocked'
+                          return (
+                            <div key={idx} className="flex items-center gap-2 text-xs">
+                              <Database className={cn('h-3 w-3 shrink-0', succeeded ? 'text-blue-400' : 'text-neutral-500')} />
+                              <span className={cn(succeeded ? 'text-blue-400' : 'text-neutral-500')}>
+                                {tool.result ? label : `${label}...`}
+                              </span>
+                              {tool.result && succeeded && <span className="text-green-400">✓</span>}
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
                   )}
@@ -487,6 +512,14 @@ export default function ChatWidget({ variant = 'dashboard' }: ChatWidgetProps) {
 
           {/* Pill input — always at bottom of container */}
           {contentVisible && <div className={cn('border-t border-neutral-700/50 transition-opacity duration-200', isOpen ? 'opacity-100' : 'opacity-0')} />}
+          {contentVisible && isOpen && pillTitle && (
+            <div className={cn('px-3 pt-2 transition-opacity duration-200', isOpen ? 'opacity-100' : 'opacity-0')}>
+              <div className="flex items-center gap-1.5 rounded-md bg-neutral-800/60 px-2 py-1 text-xs text-neutral-400 w-fit max-w-full">
+                <MessageSquare className="h-3 w-3 shrink-0 text-neutral-500" />
+                <span className="truncate max-w-[320px]">{pillTitle}</span>
+              </div>
+            </div>
+          )}
           <div
             className={cn('flex items-center gap-2 px-2', isOpen ? 'py-2' : 'py-1.5')}
             onClick={() => { if (!isOpen) toggleOpen() }}
